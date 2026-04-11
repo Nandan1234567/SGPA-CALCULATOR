@@ -27,7 +27,6 @@
     <Folder Include="Application\Interface\" />
     <Folder Include="Application\Dtos\" />
     <Folder Include="Application\Services\" />
-    <Folder Include="Domain\Models\" />
     <Folder Include="Infrastructure\PythonServices\" />
     <Folder Include="Middelware\" />
   </ItemGroup>
