@@ -1,0 +1,6 @@
+@SGPA_CALCULATOR_HostAddress = http://localhost:5050
+
+GET {{SGPA_CALCULATOR_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
