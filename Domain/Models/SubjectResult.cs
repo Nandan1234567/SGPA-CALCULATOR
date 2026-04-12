@@ -24,7 +24,7 @@
 
 
         // ── constructor ───────────────────────────────────────────────
-        // you pass EVERYTHING it needs — PDF values + DB values
+        // we pass EVERYTHING it needs — PDF values + DB values
         // it then calculates GradePoints and CreditPoints itself
 
         public SubjectResult(
@@ -44,7 +44,9 @@
             InternalMarks = internalMarks;
             ExternalMarks = externalMarks;
             ResultOfSubj = resultOfSubj;
-           
+            TotalMarks = totalMarks;
+
+
 
             // from DB
             Credits = credits;
