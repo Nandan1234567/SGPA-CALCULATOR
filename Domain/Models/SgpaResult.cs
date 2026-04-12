@@ -13,7 +13,7 @@
 
         public int Semester { get; set; }   
 
-        public int Branch { get ; set; }
+        public string    Branch { get ; set; } = string.Empty;  
 
 
         // it slected based on the subject code if subject code is cs = computer scinece 
