@@ -1,100 +1,134 @@
 ﻿namespace SGPA_CALCULATOR.Domain.Models
 {
+    /// <summary>
+    /// Immutable value object representing a subject result in VTU 22 Scheme.
+    /// Encapsulates grade calculation logic and pass/fail determination.
+    /// </summary>
     public class SubjectResult
     {
-        // ── properties ────────────────────────────────────────────────
-        // private set = only this class can write to these, nobody outside can change them
+        // ════════════════════════════════════════════════════════════════
+        // PROPERTIES
+        // ════════════════════════════════════════════════════════════════
 
         public string SubjectCode { get; private set; } = string.Empty;
         public string SubjectName { get; private set; } = string.Empty;
 
-        // comes from PDF
-        public int InternalMarks { get; private set; }
-        public int ExternalMarks { get; private set; }
-        public int TotalMarks { get; private set; }
-        public string ResultOfSubj { get; private set; } = string.Empty; // "P" or "F" from PDF
+        public int InternalMarks { get; private set; }      // CIE
+        public int ExternalMarks { get; private set; }      // SEE
+        public int TotalMarks { get; private set; }         // CIE + SEE
 
-        // comes from DB (SubjectMaster table)
         public int Credits { get; private set; }
         public bool IsLab { get; private set; }
 
-        // calculated inside constructor — needs nothing external
-        public int GradePoints { get; private set; }
-        public int CreditPoints { get; private set; }
+        public double GradePoints { get; private set; }
+        public double CreditPoints { get; private set; }
+        public string Grade { get; private set; } = string.Empty;
+        public bool IsPass { get; private set; }
 
 
-        // ── constructor ───────────────────────────────────────────────
-        // we pass EVERYTHING it needs — PDF values + DB values
-        // it then calculates GradePoints and CreditPoints itself
+        // ════════════════════════════════════════════════════════════════
+        // CONSTRUCTOR
+        // ════════════════════════════════════════════════════════════════
 
         public SubjectResult(
             string subjectCode,
             string subjectName,
             int internalMarks,
             int externalMarks,
-            string resultOfSubj,   // "P" or "F" — directly from PDF
-            int credits, 
-            int totalMarks// from SubjectMaster DB
-                     // from SubjectMaster DB
+            int totalMarks,
+            int credits,
+            bool isLab = false
         )
         {
-            // from PDF
+            // Assign from parameters
             SubjectCode = subjectCode;
             SubjectName = subjectName;
             InternalMarks = internalMarks;
             ExternalMarks = externalMarks;
-            ResultOfSubj = resultOfSubj;
             TotalMarks = totalMarks;
-
-
-
-            // from DB
             Credits = credits;
+            IsLab = isLab;
 
+            // Step 1: Determine normalization scale (1 for 100-mark subjects, 2 for 200-mark subjects)
+            double scale = (totalMarks > 100) ? 2.0 : 1.0;
 
-            // calculated — private method below does the work
-            GradePoints = CalculateGradePoints(internalMarks, externalMarks, totalMarks, resultOfSubj);
-            CreditPoints = GradePoints * Credits;
+            // Step 2: Calculate normalized values for logic checks
+            int normTotal = (int)Math.Round(totalMarks / scale);
+            int normExternal = (int)Math.Round(externalMarks / scale);
+            int normInternal = (int)Math.Round(internalMarks / scale);
+
+            // Step 3: Calculate derived values
+            GradePoints = ComputeGradePoints(normTotal, normExternal, normInternal);
+            IsPass = GradePoints > 0;
+            Grade = ComputeGrade(normTotal, GradePoints);
+            CreditPoints = Math.Round(GradePoints * credits, 2);
         }
 
+        // ════════════════════════════════════════════════════════════════
+        // PRIVATE METHODS
+        // ════════════════════════════════════════════════════════════════
 
-        // ── private method ─────────────────────────────────────────────
-        // private = nobody outside can call this, only this class uses it
-        // this method has ONE job: given marks, return grade points
-
-        private static int CalculateGradePoints(
-            int totalMarks,
-            int externalMarks,
-            int internalMarks,
-            string subjectResult   // trust the PDF if it says "F"
-          
-        )
+        private static double ComputeGradePoints(int totalMarks, int externalMarks, int internalMarks)
         {
-            // Rule 1 — if PDF itself says F, trust it, return 0
-            // This handles edge cases like BCSL305 (44 internal + 7 external = 51 total, but F)
-            if (subjectResult == "F") return 0;
-            if (subjectResult == "W") return 0;
+            // Rule 1: Check external minimum (SEE ≥ 18/50)
+            if (externalMarks < 18)
+                return 0.0;
 
-            // Rule 2 — VTU external minimum and internal minimum
-            if (internalMarks < 20) return 0;
+            // Rule 2: Check total minimum (Total ≥ 40/100)
+            if (totalMarks < 40)
+                return 0.0;
 
-            // Rule 3 — external minimum (18/50)
-            if (externalMarks < 18) return 0;
+            // Rule 3: Assign grade points
+            return totalMarks switch
+            {
+                >= 90 => 10.0,
+                >= 80 => 9.0,
+                >= 70 => 8.0,
+                >= 60 => 7.0,
+                >= 55 => 6.0,
+                >= 50 => 5.0,
+                >= 40 => 4.0,
+                _ => 0.0
+            };
+        }
 
-            // Rule 4 — total minimum (40/100)
-            if (totalMarks < 40) return 0;
+        private static string ComputeGrade(int totalMarks, double gradePoints)
+        {
+            if (gradePoints == 0.0)
+                return "F";
 
-
-            // Rule 3 — grade points from total marks
-            if (totalMarks >= 90) return 10; // O
-            if (totalMarks >= 80) return 9;  // A+
-            if (totalMarks >= 70) return 8;  // A
-            if (totalMarks >= 60) return 7;  // B+
-            if (totalMarks >= 55) return 6;  // B
-            if (totalMarks >= 50) return 5;  // C
-            if (totalMarks >= 40) return 4;  // P
-
-            return 0; // F
+            return totalMarks switch
+            {
+                >= 90 => "O",
+                >= 80 => "A+",
+                >= 70 => "A",
+                >= 60 => "B+",
+                >= 55 => "B",
+                >= 50 => "C",
+                >= 40 => "P",
+                _ => "F"
+            };
         }
     }
 }
+/// <summary>
+/// Computes letter grade based on total marks and grade points.
+/// Returns "F" if grade points are 0, otherwise maps total marks to letter grade.
+/// </summary>
+
+// ════════════════════════════════════════════════════════════════
+// PRIVATE METHODS — All calculation logic isolated here
+// ════════════════════════════════════════════════════════════════
+
+/// <summary>
+/// Computes grade points based on VTU 22 Scheme rules.
+/// This is the SINGLE SOURCE OF TRUTH for pass/fail determination.
+/// 
+/// VTU Pass Criteria (ALL must be true):
+/// 1. Total Marks ≥ 40/100
+/// 2. External Marks (SEE) ≥ 18/50
+/// 3. Internal Marks (CIE) ≥ 20/50
+/// 
+/// If ANY condition fails → returns 0 (Fail)
+/// Otherwise → returns grade points based on total marks
+/// </summary>
