@@ -41,16 +41,6 @@ namespace SGPA_CALCULATOR.Domain.Models
 
 
 
-
-
-
-
-
-
-
-        //??  what else i left
-
-
         // total crdit points divide by   totalCredits points = sgpa
 
         public double SGPA
@@ -60,7 +50,7 @@ namespace SGPA_CALCULATOR.Domain.Models
 
                 if (TotalCredits == 0) return 0; // calculated based on grade points and credits, eg A=10*3=30, B=8*3=24, C=6*3=18, D=4*3=12, F=0*3=0
 
-                int TotalCreditPoints = SubjectResults.Sum(s => s.CreditPoints);
+                double TotalCreditPoints = SubjectResults.Sum(s => s.CreditPoints);
 
                 return Math.Round((double) TotalCreditPoints / TotalCredits , 2);
             }
