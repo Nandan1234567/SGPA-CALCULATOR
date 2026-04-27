@@ -24,7 +24,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Application\Interface\" />
     <Folder Include="Infrastructure\PythonServices\" />
     <Folder Include="Middelware\" />
   </ItemGroup>

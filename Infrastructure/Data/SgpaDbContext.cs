@@ -177,7 +177,7 @@ namespace SGPA_CALCULATOR.Infrastructure.Data
 
 
 
-               
+
         }
     }
 }

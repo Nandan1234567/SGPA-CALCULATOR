@@ -21,6 +21,9 @@ namespace SGPA_CALCULATOR.Application.Services
     /// </summary>
     public class VtuCreditResolver
     {
+
+
+        // in db context we seeded data of 1st and 2nd sem so it is dependency injected
         private readonly SgpaDbContext _dbContext;
 
         public VtuCreditResolver(SgpaDbContext db)
@@ -29,9 +32,13 @@ namespace SGPA_CALCULATOR.Application.Services
         }
 
         // ── Regex: B + [2-3 uppercase letters] + [optional L] + [3 digits] + [optional A-Z] ──
+        //regex patterns are interpreted at runtime.(.compilled) but compilation takes extra time
+        // With CultureInvariant, the regex uses culture‑independent Unicode rules
+
+
         private static readonly Regex _pattern = new(
             @"^B([A-Z]{2,3})(L?)(\d{3})([A-Z]?)$",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant
+            RegexOptions.Compiled | RegexOptions.CultureInvariant  
         );
 
         // ── Zero-credit mandatory courses — always excluded from SGPA ──
@@ -52,9 +59,13 @@ namespace SGPA_CALCULATOR.Application.Services
         //    NOTE: Credits verified against official VTU 22 Scheme documents.
         //    BSCK307: UHV type, 1 credit — VTU explicitly excludes UHV from SGPA in some
         //    regulations. Set IsNonCreditForSgpa=true to be safe; verify against your VTU circular.
+
         private static readonly Dictionary<string, CreditInfo> _commonCodes =
             new(StringComparer.OrdinalIgnoreCase)
         {
+
+                // here for this method we are adding to _CommonCodes , its a shortand method for _commonCodes.Add("BSCK307", new CreditInfo("BSCK307".."));
+                // or  ["CodeA"] = 1  ["codea"] = 2
             // Sem 3
             { "BSCK307", new CreditInfo("BSCK307", 1, false,  "Social Connect (UHV - excluded)") },
 
@@ -84,19 +95,29 @@ namespace SGPA_CALCULATOR.Application.Services
 
         /// <summary>
         /// Main entry point. Resolves any VTU subject code to credits + SGPA exclusion flag.
+        /// all three code types are resolved in this single method with priority order:
         /// </summary>
         public CreditInfo Resolve(string rawCode)
         {
             if (string.IsNullOrWhiteSpace(rawCode))
                 return CreditInfo.Unknown(rawCode ?? "");
 
+            // Normalize code: trim whitespace and convert to uppercase for consistent matching
             var code = rawCode.Trim().ToUpperInvariant();
+
+
+            // first go check for zero credit courses then check for sem 1 and 2 fixed codes in database
+            // then check for common cross branch codes and finally if all fails then we will try to infer from pattern
 
             // ── Priority 1: Zero-credit mandatory courses ──
             if (_zeroCredit.Contains(code))
                 return new CreditInfo(code, 0, true, "Zero-credit mandatory (NSS/PE/Yoga/IKS)");
 
             // ── Priority 2: Sem 1 & 2 exact codes from DB ──
+
+
+            // we return the subjectMaster in db and it is called as object for mappin the code
+
             var sem12 = _dbContext.SubjectMasters.FirstOrDefault(s => s.SubjectCode == code);
             if (sem12 != null)
                 return new CreditInfo(code, sem12.Credits, sem12.IsNonCreditForSgpa, "Sem1/2 fixed code (DB)");
@@ -111,7 +132,7 @@ namespace SGPA_CALCULATOR.Application.Services
 
         private static CreditInfo InferFromPattern(string code)
         {
-            var match = _pattern.Match(code);
+            var match = _pattern.Match(code); // it goes for regex pattern
             if (!match.Success)
                 return CreditInfo.Unknown(code);
 
@@ -126,6 +147,12 @@ namespace SGPA_CALCULATOR.Application.Services
             // ── Position → Credit map per semester ──
             // All entries verified against official VTU 22 Scheme PDFs for IS and AI branches.
             // The same pattern applies to CS, EC, EE, ME, CE, CV, BT, CH branches.
+            // This is a switch expression returning a tuple of (credits, nonCredit, reason)
+            // based on the semester, position, and whether it's a lab or not. 
+            // its already defined from inferPattern so no need to define it again
+
+            //  we pass sem pos and islab as input and we get credit noncredit and reason as output so we can directly return it in creditinfo object
+
             var (credits, nonCredit, reason) = (sem, pos, isLab) switch
             {
 
@@ -199,6 +226,7 @@ namespace SGPA_CALCULATOR.Application.Services
             if (credits == 0 && !nonCredit)
                 return CreditInfo.Unknown(code, reason);
 
+            //here we return the credit info object with code, credits, noncredit and reason which we get from pattern matching
             return new CreditInfo(code, credits, nonCredit, reason);
         }
     }
