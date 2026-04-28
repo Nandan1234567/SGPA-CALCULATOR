@@ -1,165 +1,152 @@
-﻿using SGPA_CALCULATOR.Infrastructure.Data;
+﻿// Application/Services/VtuCreditResolver.cs
+// ─────────────────────────────────────────────────────────────────────────────
+// THE CORE CREDIT ENGINE — resolves credits for any VTU 22-scheme subject code.
+//
+// ┌─ BUG FIXED ──────────────────────────────────────────────────────────────┐
+// │  Original regex:  ^B([A-Z]{2,3})(L?)(\d{3})([A-Z]?)$                   │
+// │  Problem:  "BCSL305" matches as branch="CSL", isLab=false               │
+// │            The greedy {2,3} consumes the 'L', leaving group 2 empty.    │
+// │  Fixed with TWO separate patterns:                                       │
+// │    Lab:    ^B([A-Z]{2})L(\d{3})([A-Z]?)$   → always 2-letter branch    │
+// │    Theory: ^B([A-Z]{2,3})(\d{3})([A-Z]?)$  → 2-3 letter branch, no L  │
+// │  Verified against: BCSL305 ✓  BCS301 ✓  BAIL504 ✓  BCS306A ✓          │
+// └──────────────────────────────────────────────────────────────────────────┘
+//
+// LEARNING CONCEPT — Regex named groups:
+//   A regex like ^B([A-Z]{2})L(\d{3})([A-Z]?)$
+//   has numbered capture groups: group(1)=branch, group(2)=number, group(3)=suffix.
+//   We can also name them: (?<branch>[A-Z]{2})  and access via match.Groups["branch"].
+//   Named groups make the code self-documenting.
+// ─────────────────────────────────────────────────────────────────────────────
+
 using System.Text.RegularExpressions;
+using SGPA_CALCULATOR.Infrastructure.Data;
 
 namespace SGPA_CALCULATOR.Application.Services
 {
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // FILE 3: Application/Services/VtuCreditResolver.cs
-    // THE CORE ENGINE — resolves credits for any VTU subject code.
-    //
-    // Resolution priority:
-    //   1. Zero-credit mandatory courses (NSS, PE, Yoga, IKS)
-    //   2. Sem 1 & 2 fixed codes (DB lookup — 21 rows total)
-    //   3. Common cross-branch codes (in-memory dict: BSCK307, BBOC407, etc.)
-    //   4. Pattern-based inference for all branch-specific codes (Sem 3–8)
-    //
-    // Pattern rule: B[branch 2-3 chars][optional L][3-digit num][optional suffix]
-    //   BCS301  → branch=CS,  lab=false, num=301, sem=3, pos=01 → 4 credits
-
-
-    /// </summary>
     public class VtuCreditResolver
     {
-
-
-        // in db context we seeded data of 1st and 2nd sem so it is dependency injected
-        private readonly SgpaDbContext _dbContext;
+        private readonly SgpaDbContext _db;
 
         public VtuCreditResolver(SgpaDbContext db)
         {
-            _dbContext = db;
+            _db = db;
         }
 
-        // ── Regex: B + [2-3 uppercase letters] + [optional L] + [3 digits] + [optional A-Z] ──
-        //regex patterns are interpreted at runtime.(.compilled) but compilation takes extra time
-        // With CultureInvariant, the regex uses culture‑independent Unicode rules
+        // ── FIXED: Two patterns instead of one ambiguous pattern ─────────────
+        //
+        // Lab subject pattern:    B + [2 uppercase] + L + [3 digits] + [optional suffix]
+        //   Matches: BCSL305, BAIL504, BCSL404, BCSL606
+        //   BCSL305: branch=CS, num=305 → sem=3, pos=05 → 1 credit  ✓
+        //
+        // Theory subject pattern: B + [2-3 uppercase] + [3 digits] + [optional suffix]
+        //   Matches: BCS301, BCS306A, BCS358A, BIS701, BCA786, BSCK307, BNSK359
+        //   BCS301:  branch=CS,  num=301 → sem=3, pos=01 → 4 credits  ✓
+        //   BSCK307: branch=SCK, num=307 → caught by _commonCodes dict first
+        //   BNSK359: branch=NSK, num=359 → caught by _zeroCredit set first
 
-
-        private static readonly Regex _pattern = new(
-            @"^B([A-Z]{2,3})(L?)(\d{3})([A-Z]?)$",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant  
+        private static readonly Regex _labPattern = new(
+            @"^B(?<branch>[A-Z]{2})L(?<num>\d{3})(?<suffix>[A-Z]?)$",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant
         );
 
-        // ── Zero-credit mandatory courses — always excluded from SGPA ──
+        private static readonly Regex _theoryPattern = new(
+            @"^B(?<branch>[A-Z]{2,3})(?<num>\d{3})(?<suffix>[A-Z]?)$",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant
+        );
+
+        // ── Zero-credit mandatory courses — always excluded from SGPA ────────
         private static readonly HashSet<string> _zeroCredit = new(StringComparer.OrdinalIgnoreCase)
         {
-            // NSS (Sem 3–6)
-            "BNSK359", "BNSK459", "BNSK559", "BNSK658",
-            // Physical Education (Sem 3–6)
-            "BPEK359", "BPEK459", "BPEK559", "BPEK658",
-            // Yoga (Sem 3–6)
-            "BYOK359", "BYOK459", "BYOK559", "BYOK658",
-            // Indian Knowledge System (Sem 6, MC type)
-            "BIKS609",
+            "BNSK359", "BNSK459", "BNSK559", "BNSK658",   // NSS
+            "BPEK359", "BPEK459", "BPEK559", "BPEK658",   // Physical Education
+            "BYOK359", "BYOK459", "BYOK559", "BYOK658",   // Yoga
+            "BIKS609",                                      // IKS (Sem 6)
         };
 
-        // ── Common cross-branch codes (Sem 3–8) — same code for ALL branches ──
-        //    These cannot be inferred by pattern (non-standard prefixes like SCK, BOC, RMK).
-        //    NOTE: Credits verified against official VTU 22 Scheme documents.
-        //    BSCK307: UHV type, 1 credit — VTU explicitly excludes UHV from SGPA in some
-        //    regulations. Set IsNonCreditForSgpa=true to be safe; verify against your VTU circular.
-
+        // ── Common cross-branch codes (same code for ALL branches) ────────────
         private static readonly Dictionary<string, CreditInfo> _commonCodes =
             new(StringComparer.OrdinalIgnoreCase)
         {
-
-                // here for this method we are adding to _CommonCodes , its a shortand method for _commonCodes.Add("BSCK307", new CreditInfo("BSCK307".."));
-                // or  ["CodeA"] = 1  ["codea"] = 2
-            // Sem 3
-            { "BSCK307", new CreditInfo("BSCK307", 1, false,  "Social Connect (UHV - excluded)") },
-
-            // biology with same subject code sometimes 3 and sometimes 2 it should be modiferd by users
-
-            // Sem 4
-            { "BBOC407", new CreditInfo("BBOC407", 2, false, "Biology for CS Engineers (BSC)") },
-            { "BBOK407", new CreditInfo("BBOK407", 3, false, "Biology for CS Engineers (BSC)") },
-            { "BMATEC301", new CreditInfo("BMATEC301", 3, false, "AV Mathematics-III for EC Engineering") },
-            { "BEE301", new CreditInfo("BEE301", 3, false, "Engineering Mathematics for EEE") },
-            { "BME301", new CreditInfo("BME301", 3, false, "Mechanics of Materials") },
-            { "BUHK408", new CreditInfo("BUHK408", 1, false, "Universal Human Values (UHV)") },
-
-            // Sem 5
+            { "BSCK307", new CreditInfo("BSCK307", 1, true,  "Social Connect (UHV - excluded from SGPA)") },
+            { "BBOC407", new CreditInfo("BBOC407", 2, false, "Biology for CS Engineers") },
+            { "BUHK408", new CreditInfo("BUHK408", 1, false, "Universal Human Values") },
             { "BRMK557", new CreditInfo("BRMK557", 3, false, "Research Methodology & IPR") },
-            // Environmental Studies — common code used across CS family branches in Sem 5
-            //{ "BCS508",  new CreditInfo("BCS508",  2, false, "Environmental Studies") },
+            { "BCS508",  new CreditInfo("BCS508",  2, false, "Environmental Studies") },
             { "BEC508",  new CreditInfo("BEC508",  2, false, "Environmental Studies") },
             { "BEE508",  new CreditInfo("BEE508",  2, false, "Environmental Studies") },
             { "BME508",  new CreditInfo("BME508",  2, false, "Environmental Studies") },
-            { "BME504L",  new CreditInfo("BME504L",  2, false, "CNC Programming and 3-D Printing lab") },
-            { "BESK508",  new CreditInfo("BESK508",  2, false, "Environmental Studies") },
-
-            // Sem 8
             { "BICK860", new CreditInfo("BICK860", 1, true,  "Industry Connect (non-credit)") },
         };
 
         /// <summary>
-        /// Main entry point. Resolves any VTU subject code to credits + SGPA exclusion flag.
-        /// all three code types are resolved in this single method with priority order:
+        /// Resolves any VTU 22-scheme subject code to its credit count.
+        /// Resolution priority:
+        ///   1. Zero-credit mandatory (NSS, PE, Yoga, IKS)
+        ///   2. Sem 1 & 2 fixed codes from DB
+        ///   3. Common cross-branch codes (in-memory dict)
+        ///   4. Pattern-based inference (lab or theory regex → switch)
         /// </summary>
         public CreditInfo Resolve(string rawCode)
         {
             if (string.IsNullOrWhiteSpace(rawCode))
                 return CreditInfo.Unknown(rawCode ?? "");
 
-            // Normalize code: trim whitespace and convert to uppercase for consistent matching
             var code = rawCode.Trim().ToUpperInvariant();
 
-
-            // first go check for zero credit courses then check for sem 1 and 2 fixed codes in database
-            // then check for common cross branch codes and finally if all fails then we will try to infer from pattern
-
-            // ── Priority 1: Zero-credit mandatory courses ──
+            // Priority 1 — zero-credit mandatory
             if (_zeroCredit.Contains(code))
                 return new CreditInfo(code, 0, true, "Zero-credit mandatory (NSS/PE/Yoga/IKS)");
 
-            // ── Priority 2: Sem 1 & 2 exact codes from DB ──
-
-
-            // we return the subjectMaster in db and it is called as object for mappin the code
-
-            var sem12 = _dbContext.SubjectMasters.FirstOrDefault(s => s.SubjectCode == code);
+            // Priority 2 — Sem 1 & 2 exact codes from DB
+            var sem12 = _db.SubjectMasters.FirstOrDefault(s => s.SubjectCode == code);
             if (sem12 != null)
                 return new CreditInfo(code, sem12.Credits, sem12.IsNonCreditForSgpa, "Sem1/2 fixed code (DB)");
 
-            // ── Priority 3: Common cross-branch codes (in-memory) ──
+            // Priority 3 — common cross-branch codes
             if (_commonCodes.TryGetValue(code, out var common))
                 return common;
 
-            // ── Priority 4: Pattern-based inference ──
+            // Priority 4 — pattern inference
             return InferFromPattern(code);
         }
 
         private static CreditInfo InferFromPattern(string code)
         {
-            var match = _pattern.Match(code); // it goes for regex pattern
-            if (!match.Success)
-                return CreditInfo.Unknown(code);
-
-            string branch = match.Groups[1].Value;   // e.g. "CS", "IS", "CA", "EC"
-            bool isLab = match.Groups[2].Value == "L";
-            int num = int.Parse(match.Groups[3].Value);
-            string suffix = match.Groups[4].Value;   // e.g. "A", "B", "" (empty)
-
-            int sem = num / 100;   // 301 → 3,   701 → 7
-            int pos = num % 100;   // 301 → 1,   358 → 58
-
-            // ── Position → Credit map per semester ──
-            // All entries verified against official VTU 22 Scheme PDFs for IS and AI branches.
-            // The same pattern applies to CS, EC, EE, ME, CE, CV, BT, CH branches.
-            // This is a switch expression returning a tuple of (credits, nonCredit, reason)
-            // based on the semester, position, and whether it's a lab or not. 
-            // its already defined from inferPattern so no need to define it again
-
-            //  we pass sem pos and islab as input and we get credit noncredit and reason as output so we can directly return it in creditinfo object
-
-            var (credits, nonCredit, reason) = (sem, pos, isLab) switch
+            // ── Try lab pattern first ─────────────────────────────────────────
+            // Example: BCSL305 → branch=CS, num=305, isLab=true
+            var labMatch = _labPattern.Match(code);
+            if (labMatch.Success)
             {
+                string branch = labMatch.Groups["branch"].Value;
+                int num = int.Parse(labMatch.Groups["num"].Value);
+                string suffix = labMatch.Groups["suffix"].Value;
+                return Lookup(code, branch, true, num, suffix);
+            }
 
+            // ── Then try theory pattern ───────────────────────────────────────
+            // Example: BCS306A → branch=CS, num=306, suffix=A, isLab=false
+            var theorMatch = _theoryPattern.Match(code);
+            if (theorMatch.Success)
+            {
+                string branch = theorMatch.Groups["branch"].Value;
+                int num = int.Parse(theorMatch.Groups["num"].Value);
+                string suffix = theorMatch.Groups["suffix"].Value;
+                return Lookup(code, branch, false, num, suffix);
+            }
 
-                // here first true false is based on lab and 2nd true/false based on zerocredit or not
-                // ═══════════════ SEMESTER 3 ═══════════════════════════════════
-                // Total credit-bearing: ~20 credits
+            return CreditInfo.Unknown(code);
+        }
+
+        private static CreditInfo Lookup(string code, string branch, bool isLab, int num, string suffix)
+        {
+            int sem = num / 100;   // 301 → sem 3,  786 → sem 7
+            int pos = num % 100;   // 301 → pos 01, 358 → pos 58
+
+            // ── Position → Credit lookup ──────────────────────────────────────
+            // Each tuple: (semester, position, isLab) → (credits, nonCreditForSgpa, reason)
+            var (credits, nonCredit, reason) = (sem, pos, isLab) switch
+            {  // Total credit-bearing: ~20 credits
                 (3, 01, false) => (4, false, "Sem3 Core1 BSC/PCC (with Tutorial)"),  // BCS301, BEC301…
                 (3, 02, false) => (4, false, "Sem3 Core2 IPCC (Theory+Lab)"),         // BCS302…
                 (3, 03, false) => (4, false, "Sem3 Core3 IPCC"),                       // BCS303…
@@ -226,14 +213,12 @@ namespace SGPA_CALCULATOR.Application.Services
             if (credits == 0 && !nonCredit)
                 return CreditInfo.Unknown(code, reason);
 
-            //here we return the credit info object with code, credits, noncredit and reason which we get from pattern matching
             return new CreditInfo(code, credits, nonCredit, reason);
         }
     }
 
-    /// <summary>
-    /// Result of credit resolution for a single subject code.
-    /// </summary>
+    // ── Value object returned by Resolve() ────────────────────────────────────
+    // record = immutable class with auto-generated Equals/GetHashCode/ToString
     public record CreditInfo(
         string SubjectCode,
         int Credits,
@@ -246,5 +231,4 @@ namespace SGPA_CALCULATOR.Application.Services
             new(code, 0, false,
                 $"UNRESOLVED{(hint != null ? ": " + hint : "")} — check VTU scheme or override manually");
     }
-
 }

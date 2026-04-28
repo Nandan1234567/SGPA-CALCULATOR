@@ -31,6 +31,10 @@ namespace SGPA_CALCULATOR.Application.Services
             {
                 var creditInfo = _resolver.Resolve(sub.SubjectCode);
 
+
+                int finalTotal = (sub.TotalMarks > 0)
+        ? sub.TotalMarks
+        : (sub.InternalMarks + sub.ExternalMarks);
                 // If code is unresolved and caller provided a manual override, use it
                 int credits = creditInfo.IsResolved
                     ? creditInfo.Credits
@@ -44,7 +48,7 @@ namespace SGPA_CALCULATOR.Application.Services
 
                 var subResult = new SubjectResult(
                     sub.SubjectCode, sub.SubjectName,
-                    sub.InternalMarks, sub.ExternalMarks,sub.TotalMarks, credits
+                    sub.InternalMarks, sub.ExternalMarks,finalTotal, credits
                     
                 );
 
@@ -54,7 +58,7 @@ namespace SGPA_CALCULATOR.Application.Services
                     SubjectName = subResult.SubjectName,
                     InternalMarks = subResult.InternalMarks,
                     ExternalMarks = subResult.ExternalMarks,
-                    TotalMarks = subResult.TotalMarks,
+                    TotalMarks = finalTotal,
                     Credits = subResult.Credits,
                     GradePoints = subResult.GradePoints,
                     CreditPoints = subResult.CreditPoints,
