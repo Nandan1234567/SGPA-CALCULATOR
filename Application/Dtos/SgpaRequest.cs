@@ -17,6 +17,7 @@
         public int InternalMarks { get; set; }   // CIE marks (out of 50)
         public int ExternalMarks { get; set; }   // SEE marks (out of 50)
         public int TotalMarks { get; set; }   // SEE marks (out of 100)
+        public string? Result { get; set; }   // SEE marks (out of 100)
 
         // Optional: if pdfplumber extracts the credit from the PDF directly, use it.
         // Also serves as manual override when the pattern resolver can't determine credits.

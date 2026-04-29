@@ -1,24 +1,42 @@
-﻿using SGPA_CALCULATOR.Application.Dtos;
+﻿// Application/Services/SgpaService.cs
+// ─────────────────────────────────────────────────────────────────────────────
+// CHANGES IN THIS VERSION:
+//
+// 1. SubjectResult now receives pdfResult ("P","F","W","A","X")
+//    → IsPass and Grade reflect the PDF, not just our formula
+//    → Withheld (W) and Absent (A) show correctly instead of "F"
+//
+// 2. Withheld / Absent subjects are EXCLUDED from SGPA credits
+//    If a subject is W or A, its marks are unreliable (often 0 0 0).
+//    Including it would lower SGPA with junk data.
+//    It appears in the response with grade="W"/"A" so the frontend can show it.
+//
+// 3. Arrear subjects (fail/withheld from a previous semester appearing
+//    in the current PDF) are handled via the credit resolver — they resolve
+//    to whatever their semester position says. If unresolved, they get
+//    added to unresolvedCodes with a clear message.
+//
+// LEARNING — Why pass pdfResult into SubjectResult?
+//   Single Responsibility: SubjectResult owns grade display logic.
+//   If we overrode IsPass in SgpaService after construction, we'd be
+//   scattering grade logic across two files. Better to give SubjectResult
+//   all the info it needs and let it decide.
+// ─────────────────────────────────────────────────────────────────────────────
+
+using SGPA_CALCULATOR.Application.Dtos;
 using SGPA_CALCULATOR.Application.Interface;
 using SGPA_CALCULATOR.Domain.Models;
 
 namespace SGPA_CALCULATOR.Application.Services
 {
-    public class SgpaService: ISgpaService
+    public class SgpaService : ISgpaService
     {
-
-
-        // this is di loosley coupled 
         private readonly VtuCreditResolver _resolver;
 
         public SgpaService(VtuCreditResolver resolver)
         {
             _resolver = resolver;
         }
-
-        // why we use vtu credit resolver
-        // bcz it having all methods and calcuation , like regex , zero credit calcuation etc
-
 
         public SgpaResponse Calculate(SgpaRequest request)
         {
@@ -29,13 +47,9 @@ namespace SGPA_CALCULATOR.Application.Services
 
             foreach (var sub in request.Subjects)
             {
+                // ── Resolve credits ─────────────────────────────────────────
                 var creditInfo = _resolver.Resolve(sub.SubjectCode);
 
-
-                int finalTotal = (sub.TotalMarks > 0)
-        ? sub.TotalMarks
-        : (sub.InternalMarks + sub.ExternalMarks);
-                // If code is unresolved and caller provided a manual override, use it
                 int credits = creditInfo.IsResolved
                     ? creditInfo.Credits
                     : sub.ManualCreditOverride ?? 0;
@@ -43,13 +57,30 @@ namespace SGPA_CALCULATOR.Application.Services
                 if (credits == 0 && !creditInfo.IsNonCreditForSgpa)
                 {
                     unresolvedCodes.Add(sub.SubjectCode);
-                    continue;  // skip unresolvable subjects rather than crashing
+                    continue;  // can't calculate — skip rather than crash
                 }
 
+                // ── Compute total marks ──────────────────────────────────────
+                // Trust the PDF total when available; fallback to cie + see.
+                int finalTotal = (sub.TotalMarks > 0)
+                    ? sub.TotalMarks
+                    : (sub.InternalMarks + sub.ExternalMarks);
+
+                // ── Detect withheld / absent ─────────────────────────────────
+                // "W" = withheld, "A" = absent, "X"/"NE" = not eligible.
+                // These marks are not real — don't use them for SGPA.
+                var pdfResult = sub.Result?.Trim().ToUpperInvariant() ?? "";
+                bool isSpecial = pdfResult is "W" or "A" or "X" or "NE";
+
+                // ── Build SubjectResult (grade + pass computation) ────────────
                 var subResult = new SubjectResult(
-                    sub.SubjectCode, sub.SubjectName,
-                    sub.InternalMarks, sub.ExternalMarks,finalTotal, credits
-                    
+                    sub.SubjectCode,
+                    sub.SubjectName,
+                    sub.InternalMarks,
+                    sub.ExternalMarks,
+                    finalTotal,
+                    credits,
+                    pdfResult   // ← new: lets SubjectResult trust PDF for IsPass
                 );
 
                 results.Add(new SubjectResultDto
@@ -68,8 +99,12 @@ namespace SGPA_CALCULATOR.Application.Services
                     ResolutionMethod = creditInfo.ResolutionMethod,
                 });
 
-                // Only include credit-bearing subjects in SGPA
-                if (!creditInfo.IsNonCreditForSgpa && credits > 0)
+                // ── Add to SGPA totals ───────────────────────────────────────
+                // Rules for inclusion:
+                //   ✓ Credit-bearing (credits > 0)
+                //   ✓ Not excluded (IsNonCreditForSgpa = false)
+                //   ✗ Withheld / Absent / Not-eligible — marks unreliable
+                if (!creditInfo.IsNonCreditForSgpa && credits > 0 && !isSpecial)
                 {
                     totalCredits += credits;
                     totalPoints += subResult.CreditPoints;
@@ -94,21 +129,13 @@ namespace SGPA_CALCULATOR.Application.Services
             };
         }
 
-
-        // Detect VTU scheme from USN format: 4MK22CS030 → year=22 → scheme "22"
-        // 4MK25CS030 → year=25 → scheme "25"
+        // USN format: 4MK22CS030 → chars [3..4] = "22" → scheme "22"
         private static string DetectScheme(string usn)
         {
             if (string.IsNullOrWhiteSpace(usn) || usn.Length < 5) return "22";
-            // USN format: [digit][2-char college code][2-digit year][2-char branch]...
-            // Year is at index 3-4 for standard VTU USN
-            if (usn.Length >= 5 && char.IsDigit(usn[3]) && char.IsDigit(usn[4]))
-            {
-                string year = usn.Substring(3, 2);
-                return year; // "22" for 2022 scheme, "25" for 2025 scheme, etc.
-            }
-            return "22"; // default
+            if (char.IsDigit(usn[3]) && char.IsDigit(usn[4]))
+                return usn.Substring(3, 2);
+            return "22";
         }
-
     }
 }

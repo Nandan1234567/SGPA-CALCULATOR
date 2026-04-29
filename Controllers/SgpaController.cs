@@ -114,7 +114,9 @@ namespace SGPA_CALCULATOR.Controllers
                     SubjectName = row.SubjectName,
                     InternalMarks = row.InternalMarks,
                     ExternalMarks = row.ExternalMarks,
-                    TotalMarks= row.Total
+                    TotalMarks= row.Total,
+                    Result = row.Result
+
                     // ManualCreditOverride left null — VtuCreditResolver handles it
                 }).ToList(),
             };
