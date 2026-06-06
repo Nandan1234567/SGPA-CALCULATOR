@@ -22,6 +22,7 @@ import re
 import io
 import json
 import logging
+import hashlib     
 
 import pdfplumber
 from flask import Flask, request, jsonify
@@ -298,51 +299,56 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 
+# File: flask_app.py
+# ONLY this function changes — every other function stays exactly as-is
+
 @app.route("/extract", methods=["POST"])
 def extract():
-    """
-    Main endpoint — called by PdfExtractorService.cs in ASP.NET.
+    # Read the correlation ID that ASP.NET sends as a header.
+    # "X-Request-Id" is the industry standard header name.
+    # If someone calls Flask directly (Postman, curl) without the header,
+    # .get() returns the fallback "NO-CORR-ID" — logs still work, no crash.
+    request_id = request.headers.get("X-Request-Id", "NO-CORR-ID")
 
-    Request  : multipart/form-data  →  field "pdf" = the uploaded PDF file
-    Response : JSON  { usn, studentName, semester, subjects: [...] }
-    Errors   : JSON  { error: "..." }  with appropriate HTTP status code
+    # Every log line below now includes request_id.
+    # This means: search "REQ-A3F9C201" in Flask logs → see exactly what happened
+    # for that specific request. Matches the same ID in your C# logs.
 
-    ASP.NET code that calls this:
-        var content = new MultipartFormDataContent();
-        content.Add(new ByteArrayContent(pdfBytes), "pdf", "result.pdf");
-        var response = await _http.PostAsync("http://localhost:5050/extract", content);
-    """
-    # ── Validate request ──────────────────────────────────────────────────
     if "pdf" not in request.files:
-        log.warning("Request arrived without a 'pdf' field")
+        log.warning("[%s] Request missing 'pdf' field", request_id)
         return jsonify({"error": "Missing 'pdf' field in multipart form data"}), 400
 
     file = request.files["pdf"]
     if not file.filename:
+        log.warning("[%s] Empty filename received", request_id)
         return jsonify({"error": "Empty filename"}), 400
 
-    # ── Read bytes ────────────────────────────────────────────────────────
     pdf_bytes = file.read()
     if not pdf_bytes:
+        log.warning("[%s] Empty PDF bytes", request_id)
         return jsonify({"error": "PDF file is empty"}), 400
 
-    log.info("Received PDF — %d bytes — %s", len(pdf_bytes), file.filename)
+    log.info("[%s] Received PDF — %d bytes — %s", request_id, len(pdf_bytes), file.filename)
 
-    # ── Extract ───────────────────────────────────────────────────────────
     try:
         data = extract_from_bytes(pdf_bytes)
     except Exception as exc:
-        log.exception("Extraction failed")
-        return jsonify({"error": f"PDF extraction failed: {exc}"}), 500
+        log.exception("[%s] Extraction crashed — %s", request_id, exc)
+        return jsonify({
+            "error": "Cannot read this file as a PDF. "
+                     "Please upload a valid VTU result PDF downloaded from the VTU website."
+        }), 422
 
-    # ── Validate output ───────────────────────────────────────────────────
     if not data["subjects"]:
+        log.warning("[%s] No subjects found in PDF", request_id)
         return jsonify({
             "error": "No subject rows found. The PDF may not be a VTU result sheet, "
                      "or the table format is unrecognised.",
             "rawData": data,
         }), 422
 
+    log.info("[%s] Success — %d subjects extracted for USN=%s",
+             request_id, len(data["subjects"]), data.get("usn", "UNKNOWN"))
     return jsonify(data), 200
 
 
