@@ -45,6 +45,9 @@ namespace SGPA_CALCULATOR.Application.Services
             int totalCredits = 0;
             double totalPoints = 0;
 
+            // get a subjects forn the request , so go through controller what request has
+            // tnen here we get subjects so for each subject we get as a sub
+            // this sub goes to model subject result to get a credit and other  things
             foreach (var sub in request.Subjects)
             {
                 // ── Resolve credits ─────────────────────────────────────────

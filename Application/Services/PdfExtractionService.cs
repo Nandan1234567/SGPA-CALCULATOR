@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 using System.Net.Http.Json;
+using SGPA_CALCULATOR.Application.Exceptions;
 using SGPA_CALCULATOR.DTOs;
 
 namespace SGPA_CALCULATOR.Application.Services
@@ -59,7 +60,26 @@ namespace SGPA_CALCULATOR.Application.Services
             // ── Send to Flask ─────────────────────────────────────────────
             var client = _httpFactory.CreateClient("Flask");
 
-            _log.LogInformation("Sending {Bytes} bytes to Flask /extract", pdfBytes.Length);
+
+            // Generate a short correlation ID for THIS specific PDF extraction request.
+            // This same ID gets:
+            //   - Logged in C# before we call Flask
+            //   - Sent to Flask as HTTP header X-Request-Id
+            //   - Logged by Flask on receipt and on completion
+            // Result: grep "REQ-A3F9C201" in EITHER log → see the full story
+            var requestId = "REQ-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+
+            // TryAddWithoutValidation: safer than Add() — won't throw if header somehow exists
+            // X-Request-Id is the industry standard header name for correlation IDs
+            // Used by AWS, Azure, Google Cloud, nginx — your frontend can also read it
+            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Request-Id", requestId);
+
+            _log.LogInformation(
+                "[{RequestId}] Sending PDF to Flask — {Bytes} bytes — {FileName}",
+                requestId,
+                pdfBytes.Length,     // how big was the file
+                fileName);
+
 
             HttpResponseMessage response;
             try
@@ -69,20 +89,47 @@ namespace SGPA_CALCULATOR.Application.Services
             catch (HttpRequestException ex)
             {
                 // Flask is not running — give the developer a clear message
+
                 throw new InvalidOperationException(
-                    "Cannot reach Flask PDF service on http://localhost:5050. " +
-                    "Did you run start.bat (Windows) or python flask_app.py?", ex);
+            "Cannot reach Flask PDF service on http://localhost:5050. " +
+            "Make sure Flask is running: python flask_app.py", ex);
             }
 
-            // ── Parse response ────────────────────────────────────────────
+            // File: Application/Services/PdfExtractorService.cs
+            // FIXED — reads the HTTP status code and throws the RIGHT exception type
+
             if (!response.IsSuccessStatusCode)
             {
-                // Flask returned 400/422/500 — read the error message
+                // Read the error body Flask sent back
+                // Flask sends: {"error": "No subject rows found..."} or {"error": "PDF extraction failed..."}
                 var errorBody = await response.Content.ReadAsStringAsync();
-                _log.LogError("Flask returned {Code}: {Body}", response.StatusCode, errorBody);
+
+                _log.LogError(
+                    "Flask returned {StatusCode} on {FileName}: {Body}",
+                    (int)response.StatusCode,
+                    fileName,
+                    errorBody);
+
+                // 422 = Unprocessable Content = Flask understood the request
+                //       but the PDF is not a VTU result sheet.
+                //       THIS IS THE CALLER'S FAULT → PdfValidationException → 422
+                if ((int)response.StatusCode == 422)
+                {
+                    // PdfValidationException message goes directly to the user
+                    // (your middleware does: 422 => ex.Message)
+                    // So write a human-friendly message here, not a technical one
+                    throw new PdfValidationException(
+                        "The uploaded file is not a recognised VTU result PDF. " +
+                        "Please download your result directly from results.vtu.ac.in.");
+                }
+
+                // Any other non-success (500, 400 from Flask) = Flask itself broke
+                // Not the caller's fault → InvalidOperationException → 503
                 throw new InvalidOperationException(
-                    $"Flask extraction failed ({response.StatusCode}): {errorBody}");
+                    $"PDF extraction service failed ({(int)response.StatusCode}). Please try again.");
+
             }
+
 
             // System.Text.Json deserialises camelCase JSON automatically
             // because we configured JsonNamingPolicy.CamelCase in Program.cs
@@ -97,4 +144,5 @@ namespace SGPA_CALCULATOR.Application.Services
             return result;
         }
     }
+
 }
