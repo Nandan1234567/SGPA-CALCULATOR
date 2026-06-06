@@ -10,6 +10,7 @@ namespace SGPA_CALCULATOR.Domain.Models
         public int Id { get; set; }
         public string StudentName { get; set; } = string.Empty;
 
+
         public string USN { get; set; } = string.Empty;
 
         public int Semester { get; set; }
@@ -47,6 +48,7 @@ namespace SGPA_CALCULATOR.Domain.Models
         {
             get
             {
+
 
                 if (TotalCredits == 0) return 0; // calculated based on grade points and credits, eg A=10*3=30, B=8*3=24, C=6*3=18, D=4*3=12, F=0*3=0
 

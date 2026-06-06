@@ -22,7 +22,6 @@
 
   <ItemGroup>
     <Folder Include="Infrastructure\PythonServices\" />
-    <Folder Include="Middelware\" />
   </ItemGroup>
 
 </Project>

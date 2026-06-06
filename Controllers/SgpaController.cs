@@ -62,16 +62,26 @@ namespace SGPA_CALCULATOR.Controllers
         /// </summary>
         [HttpPost("from-pdf")]
         [Consumes("multipart/form-data")]
-        [RequestSizeLimit(10 * 1024 * 1024)]   // 10 MB max — VTU PDFs are ~200 KB
+        [RequestSizeLimit(2 * 1024 * 1024)]   //  — VTU PDFs are ~200 KB
         public async Task<ActionResult<SgpaResponse>> FromPdf(IFormFile? pdf)
         {
             // ── Step 1: Validate the uploaded file ────────────────────────
             if (pdf is null || pdf.Length == 0)
-                return BadRequest(new { error = "No PDF file uploaded. Use field name 'pdf'." });
+                throw new ArgumentException(
+                    "No file uploaded. Please select your VTU result PDF.");
 
+            // ContentType check: browsers set this automatically when user picks a file.
+            // .EndsWith check: fallback for tools like Postman that might not set ContentType.
             if (!pdf.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase) &&
                 !pdf.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(new { error = "Uploaded file must be a PDF." });
+                throw new ArgumentException(
+                    "The uploaded file is not a PDF. Please upload your VTU result PDF.");
+
+            //if (pdf.Length >  1024 * 1024)
+            //    return BadRequest(new
+            //    {
+            //        error = "File too large. VTU result PDFs are under 1MB. Please upload your official VTU result PDF."
+            //    });
 
             // ── Step 2: Read bytes ─────────────────────────────────────────
             byte[] pdfBytes;
@@ -82,16 +92,9 @@ namespace SGPA_CALCULATOR.Controllers
             }
 
             // ── Step 3: Send to Flask extractor ───────────────────────────
-            PdfExtractResult extracted;
-            try
-            {
-                extracted = await _extractor.ExtractAsync(pdfBytes, pdf.FileName);
-            }
-            catch (InvalidOperationException ex)
-            {
-                // Flask is down, or PDF is unrecognised format
-                return StatusCode(503, new { error = ex.Message });
-            }
+            //PdfExtractResult extracted;
+            // No try/catch — let exception bubble up to middleware
+            var extracted = await _extractor.ExtractAsync(pdfBytes, pdf.FileName);
 
             // ── Step 4: Map extracted rows → SgpaRequest ──────────────────
             //
@@ -108,6 +111,8 @@ namespace SGPA_CALCULATOR.Controllers
                 StudentName = extracted.StudentName,
                 Usn = extracted.Usn,
                 Semester = semester,
+                // here extracted subjects as i gave the name row ,
+                // the pdf plumber extracted comes goes to _extractore and comes here and it passed to sgpa request
                 Subjects = extracted.Subjects.Select(row => new SubjectInput
                 {
                     SubjectCode = row.SubjectCode,
@@ -118,10 +123,14 @@ namespace SGPA_CALCULATOR.Controllers
                     Result = row.Result
 
                     // ManualCreditOverride left null — VtuCreditResolver handles it
-                }).ToList(),
+                }).ToList(),    
             };
 
             // ── Step 5: Calculate SGPA ────────────────────────────────────
+            
+
+            // here we are injected the di for sgpa service ,
+            //      in request it has infromation sgpa service request requeired and it gives in sgpa response format
             var sgpaResponse = _sgpa.Calculate(request);
 
             return Ok(sgpaResponse);
