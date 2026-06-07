@@ -1,31 +1,17 @@
-// Program.cs — UPDATED
-// ─────────────────────────────────────────────────────────────────────────────
-// Changes from original:
-//   1. Registered IPdfExtractorService → PdfExtractorService
-//   2. Registered a named HttpClient "Flask" pointing to http://localhost:5050
-//   3. Added camelCase JSON policy so Flask JSON deserialization works cleanly
-//   4. Configured file upload size limits
-//
-// LEARNING CONCEPT — Named HttpClient:
-//   Instead of creating HttpClient anywhere you need it (which causes socket
-//   exhaustion), you register named clients once here.
-//   Then inject IHttpClientFactory and call CreateClient("Flask").
-//   The factory manages connection pooling and lifetime for you.
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Program.cs — FIXED & CLEANED
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Polly;
 using SGPA_CALCULATOR.Application.Interface;
 using SGPA_CALCULATOR.Application.Services;
 using SGPA_CALCULATOR.Infrastructure.Data;
 using SGPA_CALCULATOR.Middelware;
 using SGPA_CALCULATOR.Middleware;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // ── JSON serialisation — camelCase policy ─────────────────────────────────────
-// Flask returns camelCase JSON (Python convention).
-// This tells System.Text.Json to match camelCase JSON keys to PascalCase C# props.
-// File: Program.cs
 builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options =>
     {
@@ -41,55 +27,51 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new() { Title = "VTU SGPA Calculator API", Version = "v1" });
 });
 
-// ── Database — Sem 1 & 2 seed data (21 rows) ─────────────────────────────────
+// ── Database ───────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<SgpaDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ── Named HttpClient for Flask microservice ────────────────────────────────────
 //
-// LEARNING: AddHttpClient("Flask", client => { ... })
-//   This registers a factory that creates HttpClient instances pre-configured
-//   with the base address.  In PdfExtractorService we call:
-//       _httpFactory.CreateClient("Flask")
-//   which gives us a client already pointed at Flask.
-
-
-
-
-// Timeout: VTU PDFs extract in < 2 seconds on any modern machine.
-// We set 30 seconds as a generous upper bound for slow hardware / large PDFs.
-
-
-// ihttp client named as a flask, which manages the user
-//and client related base adress and timeout already set
-
+// FIX #1: Read config ONCE with a fail-fast guard, then REUSE those variables.
+// Never read the same config key twice — it creates inconsistency risk.
+//
 var flaskBaseUrl = builder.Configuration["FlaskService:BaseUrl"]
     ?? throw new InvalidOperationException(
         "FlaskService:BaseUrl is not configured. " +
         "Add it to appsettings.json or set FLASKSERVICE__BASEURL environment variable.");
 
-// GetValue<int> with default 30:
-//   If FlaskService:TimeoutSeconds is missing → use 30, no crash
-//   Why different from above? Because missing timeout has a safe fallback.
-//   Missing URL has NO safe fallback — we can't guess where Flask is.
 var flaskTimeout = builder.Configuration.GetValue<int>("FlaskService:TimeoutSeconds", 30);
 
 builder.Services.AddHttpClient("Flask", client =>
 {
+    // FIX #1 applied: use the already-validated variables above, not re-read config
     client.BaseAddress = new Uri(flaskBaseUrl);
     client.Timeout = TimeSpan.FromSeconds(flaskTimeout);
-});
-
+})
+.AddTransientHttpErrorPolicy(policy =>
+    policy.WaitAndRetryAsync(
+        retryCount: 2,
+        sleepDurationProvider: attempt => TimeSpan.FromMilliseconds(500 * attempt),
+        onRetry: (outcome, timespan, attempt, context) =>
+        {
+            // FIX #2: builder.Logging has no CreateLogger().
+            // Use context["logger"] pattern OR just use Console here (simple & correct).
+            // In production, inject ILogger via a separate service instead.
+            Console.WriteLine(
+                $"[FlaskRetry] Attempt {attempt} failed, " +
+                $"retrying in {timespan.TotalMilliseconds}ms. " +
+                $"Reason: {outcome.Exception?.Message}");
+        }
+    )
+);
 
 // ── Application services ───────────────────────────────────────────────────────
-// Scoped = new instance per HTTP request (safe with DbContext which is also scoped)
-builder.Services.AddScoped<VtuCreditResolver>();
+builder.Services.AddSingleton<VtuCreditResolver>();
 builder.Services.AddScoped<ISgpaService, SgpaService>();
 builder.Services.AddScoped<IPdfExtractorService, PdfExtractorService>();
 
-
-// ── CORS — allow React dev server ────────────────────────────────────────────
-
+// ── CORS — allow React dev server ─────────────────────────────────────────────
 var allowedOrigins = builder.Configuration
     .GetSection("Cors:AllowedOrigins")
     .Get<string[]>()
@@ -103,40 +85,88 @@ builder.Services.AddCors(opt =>
          .AllowAnyHeader()
          .AllowAnyMethod()));
 
+// File: Program.cs
+// REPLACE your entire AddRateLimiter block with this:
+
+builder.Services.AddRateLimiter(options =>
+{
+    // ── PDF UPLOAD: 10 per IP per minute ──────────────────────────────────────
+    // AddPolicy with RateLimitPartition = per-IP buckets
+    // Each IP gets its own independent counter
+    // Student A's 10 uploads don't affect Student B's quota
+
+    options.AddPolicy("pdf-upload", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            // partitionKey = the "bucket identifier"
+            // RemoteIpAddress = the client's IP address as seen by Kestrel
+            // If behind nginx proxy: use X-Forwarded-For header instead (see note below)
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,                    // 10 uploads per IP per minute
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,                      // reject immediately, don't queue
+                QueueProcessingOrder =
+                    System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst,
+            }
+        ));
+
+    // ── JSON CALCULATE: 30 per IP per minute ──────────────────────────────────
+    options.AddPolicy("calculate", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }
+        ));
+
+    // ── 429 Response ──────────────────────────────────────────────────────────
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode = 429;
+        // Add Retry-After header: tells browser/Postman how long to wait
+        context.HttpContext.Response.Headers["Retry-After"] = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(new
+        {
+            error = "Too many requests. Please wait 1 minute and try again.",
+            statusCode = 429,
+            retryAfter = "60 seconds"
+        }, cancellationToken);
+    };
+});
 
 // ── File upload size ───────────────────────────────────────────────────────────
-// Default ASP.NET limit is 30 MB — we set it explicitly for clarity.
-// VTU PDFs are typically 100–400 KB so 10 MB is plenty.
-
-
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(opt =>
 {
     opt.MultipartBodyLengthLimit = 2 * 1024 * 1024; // 2 MB
 });
 
-
-
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Limits.MaxRequestBodySize = 2 * 1024 * 1024; // 2 MB — hard limit
-
+    options.Limits.MaxRequestBodySize = 2 * 1024 * 1024; // 2 MB
 
     options.Limits.MinRequestBodyDataRate = new Microsoft.AspNetCore.Server.Kestrel.Core.MinDataRate(
-        bytesPerSecond: 100,       // minimum 100 bytes/second upload speed
+        bytesPerSecond: 100,
         gracePeriod: TimeSpan.FromSeconds(10));
 });
 
+builder.Services.AddResponseCompression(options => {
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
 
 
 var app = builder.Build();
 
-
-
-
-//first middlware to catch error
-
+// ── Middleware pipeline ────────────────────────────────────────────────────────
 app.UseMiddleware<KestrelSizeLimitMiddleware>();
 app.UseMiddleware<ExceptionHandleMiddleware>();
+
+
+app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -144,15 +174,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseResponseCompression();
 app.UseCors("ReactApp");
 app.UseHttpsRedirection();
 app.UseAuthorization();
+  
 app.MapControllers();
 
-// ── Auto-migrate on startup (dev only) ───────────────────────────────────────
-// This creates the SubjectMasters table with 21 seed rows if it doesn't exist.
-// Remove this in production — run migrations manually with:
-//   dotnet ef database update
+// ── Auto-migrate on startup (dev only) ────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
