@@ -27,5 +27,9 @@
         public bool IsPass { get; set; }
         public bool IsNonCreditForSgpa { get; set; }
         public string ResolutionMethod { get; set; } = string.Empty; // for debugging
+
+        public bool IsIncludedInSgpa { get; set; }= true;
+
+        public bool  IsUnresolved { get; set; }=false;
     }
 }
