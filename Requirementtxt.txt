@@ -1,5 +1,9 @@
 # VTU PDF Extractor — Python dependencies
 # Install with: pip install -r requirements.txt
 
+flask
+pdfplumber
+waitress
+
 flask==3.1.0
 pdfplumber==0.11.4
