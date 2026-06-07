@@ -42,30 +42,23 @@ var flaskBaseUrl = builder.Configuration["FlaskService:BaseUrl"]
         "Add it to appsettings.json or set FLASKSERVICE__BASEURL environment variable.");
 
 var flaskTimeout = builder.Configuration.GetValue<int>("FlaskService:TimeoutSeconds", 30);
-
+// File: Program.cs
 builder.Services.AddHttpClient("Flask", client =>
 {
-    // FIX #1 applied: use the already-validated variables above, not re-read config
     client.BaseAddress = new Uri(flaskBaseUrl);
-    client.Timeout = TimeSpan.FromSeconds(flaskTimeout);
+    client.Timeout = TimeSpan.FromSeconds(10);  // ← reduce from 30 to 10
 })
 .AddTransientHttpErrorPolicy(policy =>
     policy.WaitAndRetryAsync(
-        retryCount: 2,
-        sleepDurationProvider: attempt => TimeSpan.FromMilliseconds(500 * attempt),
+        retryCount: 1,                           // ← reduce from 2 to 1
+        sleepDurationProvider: attempt => TimeSpan.FromMilliseconds(300),  // ← 300ms flat
         onRetry: (outcome, timespan, attempt, context) =>
         {
-            // FIX #2: builder.Logging has no CreateLogger().
-            // Use context["logger"] pattern OR just use Console here (simple & correct).
-            // In production, inject ILogger via a separate service instead.
-            Console.WriteLine(
-                $"[FlaskRetry] Attempt {attempt} failed, " +
-                $"retrying in {timespan.TotalMilliseconds}ms. " +
-                $"Reason: {outcome.Exception?.Message}");
+            Console.WriteLine($"[FlaskRetry] Attempt {attempt} failed, retrying in 300ms. " +
+                              $"Reason: {outcome.Exception?.Message}");
         }
     )
 );
-
 // ── Application services ───────────────────────────────────────────────────────
 builder.Services.AddSingleton<VtuCreditResolver>();
 builder.Services.AddScoped<ISgpaService, SgpaService>();
@@ -154,7 +147,7 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 builder.Services.AddResponseCompression(options => {
-    options.EnableForHttps = true;
+    options.EnableForHttps = false;
     options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
 });
 
