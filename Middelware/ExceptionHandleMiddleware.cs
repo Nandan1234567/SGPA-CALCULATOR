@@ -102,8 +102,8 @@ namespace SGPA_CALCULATOR.Middelware
               
                 BadHttpRequestException => 413,
 
+                System.Text.Json.JsonException => (int)HttpStatusCode.BadRequest,
 
-              
 
 
                 // ── DEPENDENCY FAILURES (5xx) ───────────────────────────────
@@ -161,10 +161,9 @@ namespace SGPA_CALCULATOR.Middelware
                 // Your ArgumentException messages are written by YOU:
                 // "No subjects provided." — safe to show
 
-                413 => "File too large. VTU result PDFs are under 500KB.", 
+                413 => "Invalid request. Please check your file and try again.",
 
-
-            422 => ex.Message+" Kindly upload downloaded  pdf from the phone",
+                422 => ex.Message+" Kindly upload downloaded  pdf from the phone",
 
 
 
