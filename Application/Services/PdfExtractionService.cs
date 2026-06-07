@@ -72,8 +72,7 @@ namespace SGPA_CALCULATOR.Application.Services
             // TryAddWithoutValidation: safer than Add() — won't throw if header somehow exists
             // X-Request-Id is the industry standard header name for correlation IDs
             // Used by AWS, Azure, Google Cloud, nginx — your frontend can also read it
-            client.DefaultRequestHeaders.TryAddWithoutValidation("X-Request-Id", requestId);
-
+           
             _log.LogInformation(
                 "[{RequestId}] Sending PDF to Flask — {Bytes} bytes — {FileName}",
                 requestId,
@@ -84,7 +83,11 @@ namespace SGPA_CALCULATOR.Application.Services
             HttpResponseMessage response;
             try
             {
-                response = await client.PostAsync("/extract", content);
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/extract");
+                httpRequest.Headers.Add("X-Request-Id", requestId);
+                httpRequest.Content = content;
+
+                response = await client.SendAsync(httpRequest);
             }
             catch (HttpRequestException ex)
             {
@@ -131,7 +134,7 @@ namespace SGPA_CALCULATOR.Application.Services
             }
 
 
-            // System.Text.Json deserialises camelCase JSON automatically
+            // System.Text.Json deserialises camelCase JSON automatically   
             // because we configured JsonNamingPolicy.CamelCase in Program.cs
             var result = await response.Content.ReadFromJsonAsync<PdfExtractResult>();
 

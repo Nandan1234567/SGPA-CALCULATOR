@@ -33,22 +33,83 @@ namespace SGPA_CALCULATOR.Application.Services
         // Key: subject code uppercase. Value: SubjectMaster from DB.
         // All Sem 1 & 2 codes live here. O(1) lookup, zero DB calls after init.
         private readonly Dictionary<string, SubjectMaster> _sem12Cache;
+        private readonly ILogger<VtuCreditResolver> _log; // ADD THIS FIELD
 
-        public VtuCreditResolver(SgpaDbContext db)
+
+
+
+        public VtuCreditResolver(IServiceScopeFactory scopeFactory, ILogger<VtuCreditResolver> log)
         {
-            // Fix: Group by SubjectCode and take the first occurrence to avoid duplicate key crash
-            _sem12Cache = db.SubjectMasters
-                .AsEnumerable() // Move to memory to handle string comparisons safely
-                .GroupBy(s => s.SubjectCode.ToUpperInvariant())
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.First() // If duplicates exist, take the first one
-                );
+            _log = log;
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<SgpaDbContext>();
+                _sem12Cache = db.SubjectMasters
+                    .AsEnumerable()
+                    .GroupBy(s => s.SubjectCode.ToUpperInvariant())
+                    .ToDictionary(g => g.Key, g => g.First());
+                _log.LogInformation("VtuCreditResolver: loaded {Count} codes", _sem12Cache.Count);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "VtuCreditResolver: DB load failed");
+                _sem12Cache = new Dictionary<string, SubjectMaster>();
+            }
         }
+
+        //public VtuCreditResolver(SgpaDbContext db , ILogger<VtuCreditResolver> log)
+        //{
+
+        //    _log = log;
+
+        //    try
+        //    {
+        //        _sem12Cache = db.SubjectMasters
+        //            .AsEnumerable()
+        //            .GroupBy(s => s.SubjectCode.ToUpperInvariant())
+        //            .ToDictionary(
+        //                g => g.Key,
+        //                g =>
+        //                {
+        //                    // Log duplicates — shouldn't exist, but if they do, you want to know
+        //                    if (g.Count() > 1)
+        //                        _log.LogWarning(
+        //                            "Duplicate SubjectCode {Code} in SubjectMasters table — using first entry",
+        //                            g.Key);
+        //                    return g.First();
+        //                }
+        //            );
+
+        //        _log.LogInformation(
+        //            "VtuCreditResolver: loaded {Count} Sem1/2 codes from DB",
+        //            _sem12Cache.Count);
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        // DB is down or SubjectMasters table doesn't exist yet
+        //        // Log the error so you know about it — but don't crash
+        //        _log.LogError(ex,
+        //            "VtuCreditResolver: failed to load Sem1/2 cache from DB. " +
+        //            "Sem1/2 codes will appear as unresolved. Sem3-8 pattern matching still works.");
+
+        //        // Empty dict = every _sem12Cache.TryGetValue() call returns false
+        //        // Resolver falls through to pattern matching for all codes
+        //        // Sem 1-2 codes (BMATS101 etc.) will be flagged IsUnresolved
+        //        // Student sees grey row + "enter credits" — not a crash
+        //        _sem12Cache = new Dictionary<string, SubjectMaster>();
+        //    }
+        //}
+
+
 
         // ── TWO REGEX PATTERNS (N+1 fix was the new bug; these were fixed earlier) ──
         // Lab:    B + [2 letters] + L + [3 digits] + [optional suffix]
         // Theory: B + [2-3 letters]   + [3 digits] + [optional suffix]
+
+
+
+
         private static readonly Regex _labPattern = new(
             @"^B(?<branch>[A-Z]{2})L(?<num>\d{3})(?<suffix>[A-Z]?)$",
             RegexOptions.Compiled | RegexOptions.CultureInvariant
@@ -106,7 +167,7 @@ namespace SGPA_CALCULATOR.Application.Services
             var code = rawCode.Trim().ToUpperInvariant();
 
             // Priority 1 — zero-credit mandatory
-            if (_zeroCredit.Contains(code))
+            if (_zeroCredit.Contains(code)) 
                 return new CreditInfo(code, 0, true, "Zero-credit mandatory (NSS/PE/Yoga/IKS)");
 
             // Priority 2 — Sem 1 & 2 from in-memory cache (was N+1, now O(1))
