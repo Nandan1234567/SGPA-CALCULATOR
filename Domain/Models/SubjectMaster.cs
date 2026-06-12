@@ -1,6 +1,8 @@
 ﻿// Domain/Models/SubjectMaster.cs
 
 
+// this subject master created  for the db properites to sert
+
     public class SubjectMaster
     {
         public int Id { get; set; }

@@ -1,24 +1,4 @@
-﻿// Domain/Models/SubjectResult.cs
-// ─────────────────────────────────────────────────────────────────────────────
-// BUGS FIXED:
-//
-// BUG 1 (Critical) — internal-only subjects always showed grade=F
-//   Old:  if (externalMarks < 18) return 0.0;
-//   BNSK459: external=0 → 0 < 18 = TRUE → grade=F  ← WRONG, PDF says P
-//   Fix:  if (normExternal > 0 && normExternal < 18)
-//   Now:  external=0 skips the check → grade computed from total alone ✓
-//
-// BUG 2 — Withheld / Absent subjects
-//   W (Withheld) and A (Absent) need special grades, not computed from marks.
-//   We accept a pdfResult param ("P","F","W","A","X") and use it to override
-//   the computed grade when marks can't be trusted (W, A).
-//
-// LEARNING — Why accept pdfResult at all?
-//   Because the PDF is the official source of truth. VTU prints "P" or "F"
-//   directly. Our formula is a fallback when pdfResult is empty or unavailable.
-//   When pdfResult is available, we trust it for IsPass and Grade display.
-//   We still compute GradePoints from marks because SGPA needs the number.
-// ─────────────────────────────────────────────────────────────────────────────
+﻿
 
 namespace SGPA_CALCULATOR.Domain.Models
 {
@@ -53,7 +33,7 @@ namespace SGPA_CALCULATOR.Domain.Models
             int totalMarks,
             int credits,
             string pdfResult = "",
-            bool isLab = false)
+            bool isLab = false) //by default lab is false and pdf result is empty 
         {
             SubjectCode = subjectCode;
             SubjectName = subjectName;
@@ -66,6 +46,8 @@ namespace SGPA_CALCULATOR.Domain.Models
             // ── Handle special PDF result codes first ──────────────────────
             // W = Withheld, A = Absent, X/NE = Not Eligible
             // For these, marks are unreliable (often 0). Don't compute grade from marks.
+
+
             var result = pdfResult.Trim().ToUpperInvariant();
             if (result is "W" or "A" or "X" or "NE")
             {
@@ -79,6 +61,9 @@ namespace SGPA_CALCULATOR.Domain.Models
             // ── Normalization (handles 200-mark subjects) ──────────────────
             // Standard: CIE 0-50 + SEE 0-50 = Total 0-100 → scale = 1.0
             // 200-mark: scale = 2.0. Thresholds stay the same (40, 18).
+
+
+
             double scale = (totalMarks > 100) ? 2.0 : 1.0;
             int normTotal = (int)Math.Round(totalMarks / scale);
             int normExternal = (int)Math.Round(see / scale);
