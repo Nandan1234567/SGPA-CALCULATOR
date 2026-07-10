@@ -145,7 +145,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("ReactApp");
-app.UseHttpsRedirection();
+// ✅ Fix — only redirect in production
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseAuthorization();
 app.MapControllers();
 

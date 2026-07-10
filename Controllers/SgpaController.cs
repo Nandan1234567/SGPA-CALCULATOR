@@ -17,7 +17,10 @@
 using Microsoft.AspNetCore.Mvc;
 using SGPA_CALCULATOR.Application.Dtos;
 using SGPA_CALCULATOR.Application.Interface;
+
 using SGPA_CALCULATOR.Application.Services;
+using Microsoft.Extensions.Logging; // Added for internal developer logging
+using System.Net.Http; 
 using SGPA_CALCULATOR.DTOs;
 
 namespace SGPA_CALCULATOR.Controllers
@@ -29,15 +32,21 @@ namespace SGPA_CALCULATOR.Controllers
         private readonly ISgpaService _sgpa;
         private readonly VtuCreditResolver _resolver;
         private readonly IPdfExtractorService _extractor;
+        private readonly ILogger<SgpaController> _logger;
+        private readonly IHttpClientFactory _httpFactory;
 
         public SgpaController(
             ISgpaService sgpa,
             VtuCreditResolver resolver,
-            IPdfExtractorService extractor)
+            IPdfExtractorService extractor, 
+            ILogger<SgpaController> logger,
+            IHttpClientFactory httpFactory)
         {
             _sgpa = sgpa;
             _resolver = resolver;
             _extractor = extractor;
+            _logger = logger;
+            _httpFactory = httpFactory;
         }
 
 
@@ -179,6 +188,40 @@ namespace SGPA_CALCULATOR.Controllers
                 isResolved = info.IsResolved,
                 resolutionMethod = info.ResolutionMethod,
             });
+        }
+
+
+
+        // ════════════════════════════════════════════════════════════════════
+        // NEW ENDPOINT — Silent Wake-Up Ping
+        // GET /api/sgpa/ping
+        // ════════════════════════════════════════════════════════════════════
+        /// <summary>
+        /// Wakes up ASP.NET and simultaneously triggers a background check to wake up Python Flask.
+        /// </summary>
+        [HttpGet("ping")]
+        public async Task<IActionResult> Ping()
+        {
+            try
+            {
+                // Request the pre-configured named Flask client from Program.cs
+                var client = _httpFactory.CreateClient("Flask");
+
+                // Fire a fast request to Python's built-in health endpoint
+                var response = await client.GetAsync("/health");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Flask service returned bad status during warm-up: {StatusCode}", response.StatusCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Silently trap and log network faults so students don't see an error page on load
+                _logger.LogWarning("Flask wake-up routine failed. Service might be sleeping or unreachable: {Message}", ex.Message);
+            }
+
+            return Ok(new { status = "awake", timestamp = DateTime.UtcNow });
         }
     }
 }

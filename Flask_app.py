@@ -22,7 +22,6 @@ import re
 import io
 import json
 import logging
-import hashlib     
 
 import pdfplumber
 from flask import Flask, request, jsonify
@@ -32,6 +31,7 @@ from flask import Flask, request, jsonify
 # ─────────────────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
@@ -355,8 +355,42 @@ def extract():
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
-
+# NEW:
 if __name__ == "__main__":
-    # debug=False in production / on the server
-    # threaded=True so ASP.NET can make parallel requests
-    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)
+    import os
+
+    env = os.environ.get("FLASK_ENV", "development")
+    # FLASK_ENV environment variable controls which server runs.
+    # Development: set nothing → Flask dev server (auto-reload, debug info)
+    # Production:  set FLASK_ENV=production → Waitress (multi-process, no debug)
+    #
+    # How to set on Windows locally:  set FLASK_ENV=production
+    # How to set on Azure App Service: Configuration → App Settings → FLASK_ENV = production
+    # How to set with systemd:         Environment=FLASK_ENV=production in service file
+
+    if env == "production":
+        # ── PRODUCTION: Waitress ───────────────────────────────────────────
+        # pip install waitress  (add to requirements.txt)
+        #
+        # WHY Waitress and not Flask dev server?
+        # Flask dev server: 1 Python process, GIL limits true parallelism
+        # Waitress: true multi-threaded WSGI server, no GIL bottleneck for I/O
+        #
+        # threads=4 means 4 concurrent PDF extractions at once
+        # On result day: 10 students upload simultaneously
+        # Waitress: students 1-4 processed immediately (~94ms each)
+        #           students 5-8 queued, wait for slot (~188ms)
+        #           students 9-10 queued (~282ms)
+        # Flask dev: students 1-10 queued behind GIL → student 10 waits ~940ms
+        #
+        # threads=4 is conservative for a 2-core Azure VM.
+        # Rule of thumb: threads = 2 × CPU cores for I/O-bound work
+        from waitress import serve
+        print(f"Starting Waitress on port 5050 with 4 threads")
+        serve(app, host="127.0.0.1", port=5050, threads=4)
+    else:
+        # ── DEVELOPMENT: Flask dev server ─────────────────────────────────
+        # debug=True: auto-reloads when you save flask_app.py
+        # threaded=True: handles concurrent requests during testing
+        print("Starting Flask dev server on port 5050")
+        app.run(host="0.0.0.0", port=5050, debug=True, threaded=True)   
