@@ -17,8 +17,10 @@
 using Microsoft.AspNetCore.Mvc;
 using SGPA_CALCULATOR.Application.Dtos;
 using SGPA_CALCULATOR.Application.Interface;
-using SGPA_CALCULATOR.Application.Mappers;
+
 using SGPA_CALCULATOR.Application.Services;
+using Microsoft.Extensions.Logging; // Added for internal developer logging
+using System.Net.Http;
 using SGPA_CALCULATOR.DTOs;
 
 namespace SGPA_CALCULATOR.Controllers
@@ -30,18 +32,21 @@ namespace SGPA_CALCULATOR.Controllers
         private readonly ISgpaService _sgpa;
         private readonly VtuCreditResolver _resolver;
         private readonly IPdfExtractorService _extractor;
-        private readonly ILogger<SgpaController> _log;
-        
+        private readonly ILogger<SgpaController> _logger;
+        private readonly IHttpClientFactory _httpFactory;
 
         public SgpaController(
             ISgpaService sgpa,
             VtuCreditResolver resolver,
-            IPdfExtractorService extractor, ILogger<SgpaController> logger)
+            IPdfExtractorService extractor,
+            ILogger<SgpaController> logger,
+            IHttpClientFactory httpFactory)
         {
             _sgpa = sgpa;
             _resolver = resolver;
             _extractor = extractor;
-            _log = logger;
+            _logger = logger;
+            _httpFactory = httpFactory;
         }
 
 
@@ -67,16 +72,12 @@ namespace SGPA_CALCULATOR.Controllers
         [HttpPost("from-pdf")]
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(2 * 1024 * 1024)]   //  — VTU PDFs are ~200 KB
-        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("pdf-upload")]
         public async Task<ActionResult<SgpaResponse>> FromPdf(IFormFile? pdf)
         {
-
-            var sw = System.Diagnostics.Stopwatch.StartNew();   
-
             // ── Step 1: Validate the uploaded file ────────────────────────
             if (pdf is null || pdf.Length == 0)
                 throw new ArgumentException(
-                    "No file uploaded. Please select your VTU result PDF.");    
+                    "No file uploaded. Please select your VTU result PDF.");
 
             // ContentType check: browsers set this automatically when user picks a file.
             // .EndsWith check: fallback for tools like Postman that might not set ContentType.
@@ -110,17 +111,29 @@ namespace SGPA_CALCULATOR.Controllers
             // Flask gives us PdfExtractResult (raw extracted data).
             // SgpaService wants SgpaRequest (our domain model).
             // We translate between them here.
-            // File: Controllers/SgpaController.cs - FromPdf method
 
-           
             if (!int.TryParse(extracted.Semester, out int semester))
-                semester = 0;
+                semester = 0;   // SgpaService will handle unknown semester gracefully
 
-            // PdfResultMapper.ToSgpaRequest() ALSO parses extracted.Semester internally:
-            var request = PdfResultMapper.ToSgpaRequest(extracted);
+            var request = new SgpaRequest
+            {
+                StudentName = extracted.StudentName,
+                Usn = extracted.Usn,
+                Semester = semester,
+                // here extracted subjects as i gave the name row ,
+                // the pdf plumber extracted comes goes to _extractore and comes here and it passed to sgpa request
+                Subjects = extracted.Subjects.Select(row => new SubjectInput
+                {
+                    SubjectCode = row.SubjectCode,
+                    SubjectName = row.SubjectName,
+                    InternalMarks = row.InternalMarks,
+                    ExternalMarks = row.ExternalMarks,
+                    TotalMarks = row.Total,
+                    Result = row.Result
 
-            _log.LogInformation("... Sem={Sem} ...", semester);
-
+                    // ManualCreditOverride left null — VtuCreditResolver handles it
+                }).ToList(),
+            };
 
             // ── Step 5: Calculate SGPA ────────────────────────────────────
 
@@ -128,16 +141,6 @@ namespace SGPA_CALCULATOR.Controllers
             // here we are injected the di for sgpa service ,
             //      in request it has infromation sgpa service request requeired and it gives in sgpa response format
             var sgpaResponse = _sgpa.Calculate(request);
-
-            sw.Stop();
-            _log.LogInformation(
-                "PDF processed — USN={Usn} Sem={Sem} Subjects={Count} " +
-                "FileSize={Bytes}bytes Duration={Ms}ms",
-                extracted.Usn,
-                semester,
-                request.Subjects.Count,
-                pdf.Length,
-                sw.ElapsedMilliseconds);
 
             return Ok(sgpaResponse);
         }
@@ -153,59 +156,10 @@ namespace SGPA_CALCULATOR.Controllers
         /// Calculate SGPA from JSON input (manual or from client-side extraction).
         /// </summary>
         [HttpPost("calculate")]
-        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("calculate")]    // A DD
-
         public ActionResult<SgpaResponse> Calculate([FromBody] SgpaRequest request)
         {
-                if (request.Subjects == null || request.Subjects.Count == 0)
+            if (request.Subjects == null || request.Subjects.Count == 0)
                 return BadRequest(new { error = "No subjects provided." });
-
-
-
-
-            // With this fix:
-            //   We force totalMarks = 45 + 30 = 75 before service sees it
-            //   Service computes grade from 75 — correct
-
-
-            if (request.Subjects.Count < 3)
-            {
-                // Log a warning — you want to know this is happening
-                // Don't return error — maybe a student genuinely has 2 subjects (makeup exam)
-                _log.LogWarning(
-                    "Calculate called with only {Count} subjects for USN={Usn} — possible frontend bug",
-                    request.Subjects.Count, request.Usn);
-            }
-
-            for (int i = 0; i < request.Subjects.Count; i++)
-            {
-                var sub = request.Subjects[i];
-
-                // Guard: null/empty subject code crashes VtuCreditResolver.Resolve()
-                // ArgumentException → middleware → 400
-                if (string.IsNullOrWhiteSpace(sub.SubjectCode))
-                    throw new ArgumentException(
-                        $"Subject at index {i} has empty SubjectCode. All subjects must have a code.");
-
-                // Clamp marks to valid VTU range — don't reject, just correct
-                // WHY clamp instead of reject?
-                // Rejecting means 1 bad subject blocks 8 good ones.
-                // Clamping means the weird value gets corrected, calc still runs.
-                // Frontend should prevent this, but backend defends anyway.
-                //
-                // Internal: 0-50 (VTU CIE max is 50)
-                // External: 0-100 (most subjects 0-50, but 200-mark subjects exist)
-                //           We use 100 as upper bound — SgpaService handles scaling
-                sub.InternalMarks = Math.Clamp(sub.InternalMarks, 0, 50);
-                sub.ExternalMarks = Math.Clamp(sub.ExternalMarks, 0, 100);
-
-                // Always recompute total from clamped values
-                // WHY: user might send internal=45 but forget to update totalMarks=71
-                // If we trust their totalMarks, grade is computed from stale data
-                // Recomputing here means SgpaService always sees correct total
-                sub.TotalMarks = sub.InternalMarks + sub.ExternalMarks;
-            }
-
 
             return Ok(_sgpa.Calculate(request));
         }
@@ -235,5 +189,40 @@ namespace SGPA_CALCULATOR.Controllers
                 resolutionMethod = info.ResolutionMethod,
             });
         }
+
+
+
+        // ════════════════════════════════════════════════════════════════════
+        // NEW ENDPOINT — Silent Wake-Up Ping
+        // GET /api/sgpa/ping
+        // ════════════════════════════════════════════════════════════════════
+        /// <summary>
+        /// Wakes up ASP.NET and simultaneously triggers a background check to wake up Python Flask.
+        /// </summary>
+        [HttpGet("ping")]
+        public async Task<IActionResult> Ping()
+        {
+            try
+            {
+                // Request the pre-configured named Flask client from Program.cs
+                var client = _httpFactory.CreateClient("Flask");
+
+                // Fire a fast request to Python's built-in health endpoint
+                var response = await client.GetAsync("/health");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("Flask service returned bad status during warm-up: {StatusCode}", response.StatusCode);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Silently trap and log network faults so students don't see an error page on load
+                _logger.LogWarning("Flask wake-up routine failed. Service might be sleeping or unreachable: {Message}", ex.Message);
+            }
+
+            return Ok(new { status = "awake", timestamp = DateTime.UtcNow });
+        }
     }
 }
+
