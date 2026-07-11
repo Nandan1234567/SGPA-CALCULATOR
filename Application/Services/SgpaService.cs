@@ -60,7 +60,7 @@ namespace SGPA_CALCULATOR.Application.Services
                 if (credits == 0 && !creditInfo.IsNonCreditForSgpa)
                 {
                     unresolvedCodes.Add(sub.SubjectCode);
-                    continue;  // can't calculate — skip rather than crash
+                    //continue;  // can't calculate — skip rather than crash
                 }
 
                 // ── Compute total marks ──────────────────────────────────────
