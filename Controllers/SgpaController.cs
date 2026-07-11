@@ -1,26 +1,8 @@
-﻿// Controllers/SgpaController.cs
-// ─────────────────────────────────────────────────────────────────────────────
-// UPDATED — added POST /api/sgpa/from-pdf endpoint.
-// Existing endpoints (/calculate and /resolve) are unchanged.
-//
-// LEARNING CONCEPT — Controller responsibilities:
-//   A controller should ONLY:
-//     1. Accept the HTTP request
-//     2. Validate basic input
-//     3. Call a service
-//     4. Return an HTTP response
-//
-//   Business logic (SGPA math, credit resolution) lives in services, not here.
-//   This separation makes your code testable and maintainable.
-// ─────────────────────────────────────────────────────────────────────────────
-
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using SGPA_CALCULATOR.Application.Dtos;
 using SGPA_CALCULATOR.Application.Interface;
-
+using SGPA_CALCULATOR.Application.Mappers;
 using SGPA_CALCULATOR.Application.Services;
-using Microsoft.Extensions.Logging; // Added for internal developer logging
-using System.Net.Http;
 using SGPA_CALCULATOR.DTOs;
 
 namespace SGPA_CALCULATOR.Controllers
@@ -32,67 +14,42 @@ namespace SGPA_CALCULATOR.Controllers
         private readonly ISgpaService _sgpa;
         private readonly VtuCreditResolver _resolver;
         private readonly IPdfExtractorService _extractor;
-        private readonly ILogger<SgpaController> _logger;
+        private readonly ILogger<SgpaController> _log;
         private readonly IHttpClientFactory _httpFactory;
 
         public SgpaController(
             ISgpaService sgpa,
             VtuCreditResolver resolver,
             IPdfExtractorService extractor,
-            ILogger<SgpaController> logger,
+            ILogger<SgpaController> log,
             IHttpClientFactory httpFactory)
         {
             _sgpa = sgpa;
             _resolver = resolver;
             _extractor = extractor;
-            _logger = logger;
+            _log = log;
             _httpFactory = httpFactory;
         }
 
-
-        // ════════════════════════════════════════════════════════════════════
-        // NEW ENDPOINT — Upload PDF, get SGPA back in one call
-        // POST /api/sgpa/from-pdf
-        //
-        // How to call from Swagger UI or your React frontend:
-        //   Content-Type: multipart/form-data
-        //   Field:        pdf  =  <the VTU result PDF file>
-        //
-        // What happens inside:
-        //   1. Read the file bytes from the form
-        //   2. Send bytes to Flask → get extracted JSON
-        //   3. Map extracted JSON → SgpaRequest
-        //   4. Call SgpaService.Calculate() → SgpaResponse
-        //   5. Return the response
-        // ════════════════════════════════════════════════════════════════════
-
         /// <summary>
-        /// Upload a VTU result PDF.  Returns SGPA + subject breakdown.
+        /// Uploads a VTU result PDF and returns the calculated SGPA and per-subject breakdown.
         /// </summary>
         [HttpPost("from-pdf")]
         [Consumes("multipart/form-data")]
-        [RequestSizeLimit(2 * 1024 * 1024)]   //  — VTU PDFs are ~200 KB
-        public async Task<ActionResult<SgpaResponse>> FromPdf(IFormFile? pdf)
+        [RequestSizeLimit(2 * 1024 * 1024)]
+        public async Task<ActionResult<SgpaResponse>> FromPdf(IFormFile pdf)
         {
-            // ── Step 1: Validate the uploaded file ────────────────────────
-            if (pdf is null || pdf.Length == 0)
-                throw new ArgumentException(
-                    "No file uploaded. Please select your VTU result PDF.");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
 
-            // ContentType check: browsers set this automatically when user picks a file.
-            // .EndsWith check: fallback for tools like Postman that might not set ContentType.
+            // Validate file presence and basic PDF content type/extension
+            if (pdf is null || pdf.Length == 0)
+                throw new ArgumentException("No file uploaded. Please select your VTU result PDF.");
+
             if (!pdf.ContentType.Contains("pdf", StringComparison.OrdinalIgnoreCase) &&
                 !pdf.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException(
-                    "The uploaded file is not a PDF. Please upload your VTU result PDF.");
+                throw new ArgumentException("The uploaded file is not a PDF. Please upload your VTU result PDF.");
 
-            //if (pdf.Length >  1024 * 1024)
-            //    return BadRequest(new
-            //    {
-            //        error = "File too large. VTU result PDFs are under 1MB. Please upload your official VTU result PDF."
-            //    });
-
-            // ── Step 2: Read bytes ─────────────────────────────────────────
+            // Buffer the incoming HTTP file stream into a byte array for Flask
             byte[] pdfBytes;
             using (var ms = new MemoryStream())
             {
@@ -100,60 +57,33 @@ namespace SGPA_CALCULATOR.Controllers
                 pdfBytes = ms.ToArray();
             }
 
-            // ── Step 3: Send to Flask extractor ───────────────────────────
-            //PdfExtractResult extracted;
-            // No try/catch — let exception bubble up to middleware
+            // Send raw bytes to the Flask microservice for OCR/text extraction
             var extracted = await _extractor.ExtractAsync(pdfBytes, pdf.FileName);
 
-            // ── Step 4: Map extracted rows → SgpaRequest ──────────────────
-            //
-            // LEARNING: This is the "mapping" pattern.
-            // Flask gives us PdfExtractResult (raw extracted data).
-            // SgpaService wants SgpaRequest (our domain model).
-            // We translate between them here.
-
+            // Map raw Flask output into domain request model
             if (!int.TryParse(extracted.Semester, out int semester))
-                semester = 0;   // SgpaService will handle unknown semester gracefully
+                semester = 0;
 
-            var request = new SgpaRequest
-            {
-                StudentName = extracted.StudentName,
-                Usn = extracted.Usn,
-                Semester = semester,
-                // here extracted subjects as i gave the name row ,
-                // the pdf plumber extracted comes goes to _extractore and comes here and it passed to sgpa request
-                Subjects = extracted.Subjects.Select(row => new SubjectInput
-                {
-                    SubjectCode = row.SubjectCode,
-                    SubjectName = row.SubjectName,
-                    InternalMarks = row.InternalMarks,
-                    ExternalMarks = row.ExternalMarks,
-                    TotalMarks = row.Total,
-                    Result = row.Result
+            var request = PdfResultMapper.ToSgpaRequest(extracted);
+            _log.LogInformation("Mapped PDF — Sem={Sem} Subjects={Count}", semester, request.Subjects.Count);
 
-                    // ManualCreditOverride left null — VtuCreditResolver handles it
-                }).ToList(),
-            };
-
-            // ── Step 5: Calculate SGPA ────────────────────────────────────
-
-
-            // here we are injected the di for sgpa service ,
-            //      in request it has infromation sgpa service request requeired and it gives in sgpa response format
+            // Execute synchronous SGPA calculation
             var sgpaResponse = _sgpa.Calculate(request);
+
+            sw.Stop();
+            _log.LogInformation(
+                "PDF processed — USN={Usn} Sem={Sem} Subjects={Count} FileSize={Bytes}bytes Duration={Ms}ms",
+                extracted.Usn,
+                semester,
+                request.Subjects.Count,
+                pdf.Length,
+                sw.ElapsedMilliseconds);
 
             return Ok(sgpaResponse);
         }
 
-
-        // ════════════════════════════════════════════════════════════════════
-        // EXISTING ENDPOINT (unchanged)
-        // POST /api/sgpa/calculate
-        // For direct JSON input (e.g., when pdfplumber runs on the client side)
-        // ════════════════════════════════════════════════════════════════════
-
         /// <summary>
-        /// Calculate SGPA from JSON input (manual or from client-side extraction).
+        /// Calculates SGPA from raw JSON input (used for manual entry and frontend edits).
         /// </summary>
         [HttpPost("calculate")]
         public ActionResult<SgpaResponse> Calculate([FromBody] SgpaRequest request)
@@ -161,17 +91,31 @@ namespace SGPA_CALCULATOR.Controllers
             if (request.Subjects == null || request.Subjects.Count == 0)
                 return BadRequest(new { error = "No subjects provided." });
 
+            if (request.Subjects.Count < 3)
+                _log.LogWarning("Calculate called with only {Count} subjects — USN={Usn}. Possible frontend bug or makeup exam.",
+                    request.Subjects.Count, request.Usn);
+
+            // Sanitize and normalize subject marks before passing to domain layer
+            for (int i = 0; i < request.Subjects.Count; i++)
+            {
+                var sub = request.Subjects[i];
+
+                if (string.IsNullOrWhiteSpace(sub.SubjectCode))
+                    throw new ArgumentException($"Subject at index {i} has empty SubjectCode. All subjects must have a valid VTU subject code.");
+
+                // Clamp CIE (0-50) and SEE (0-100) to valid VTU boundaries
+                sub.InternalMarks = Math.Clamp(sub.InternalMarks, 0, 50);
+                sub.ExternalMarks = Math.Clamp(sub.ExternalMarks, 0, 100);
+
+                // Recompute total to prevent frontend calculation discrepancies
+                sub.TotalMarks = sub.InternalMarks + sub.ExternalMarks;
+            }
+
             return Ok(_sgpa.Calculate(request));
         }
 
-
-        // ════════════════════════════════════════════════════════════════════
-        // DEBUG ENDPOINT (unchanged)
-        // GET /api/sgpa/resolve?code=BCS301
-        // ════════════════════════════════════════════════════════════════════
-
         /// <summary>
-        /// Debug: resolve a subject code to see what credits it maps to.
+        /// Debug tool: resolves a subject code to inspect credit assignment and resolution strategy.
         /// </summary>
         [HttpGet("resolve")]
         public ActionResult ResolveCode([FromQuery] string code)
@@ -180,6 +124,7 @@ namespace SGPA_CALCULATOR.Controllers
                 return BadRequest(new { error = "code query param required" });
 
             var info = _resolver.Resolve(code);
+
             return Ok(new
             {
                 subjectCode = info.SubjectCode,
@@ -190,39 +135,27 @@ namespace SGPA_CALCULATOR.Controllers
             });
         }
 
-
-
-        // ════════════════════════════════════════════════════════════════════
-        // NEW ENDPOINT — Silent Wake-Up Ping
-        // GET /api/sgpa/ping
-        // ════════════════════════════════════════════════════════════════════
         /// <summary>
-        /// Wakes up ASP.NET and simultaneously triggers a background check to wake up Python Flask.
+        /// Warm-up endpoint triggered on initial load to wake ASP.NET and check Flask service health.
         /// </summary>
         [HttpGet("ping")]
         public async Task<IActionResult> Ping()
         {
             try
             {
-                // Request the pre-configured named Flask client from Program.cs
                 var client = _httpFactory.CreateClient("Flask");
-
-                // Fire a fast request to Python's built-in health endpoint
                 var response = await client.GetAsync("/health");
 
                 if (!response.IsSuccessStatusCode)
-                {
-                    _logger.LogWarning("Flask service returned bad status during warm-up: {StatusCode}", response.StatusCode);
-                }
+                    _log.LogWarning("Flask returned {Status} during warm-up ping", (int)response.StatusCode);
             }
             catch (Exception ex)
             {
-                // Silently trap and log network faults so students don't see an error page on load
-                _logger.LogWarning("Flask wake-up routine failed. Service might be sleeping or unreachable: {Message}", ex.Message);
+                // Absorb exceptions so ASP.NET still reports as awake even if Flask is booting
+                _log.LogWarning("Flask ping failed — service may be starting: {Message}", ex.Message);
             }
 
             return Ok(new { status = "awake", timestamp = DateTime.UtcNow });
         }
     }
 }
-
