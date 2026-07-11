@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SGPA_CALCULATOR.Infrastructure.Data;
 
@@ -10,9 +11,11 @@ using SGPA_CALCULATOR.Infrastructure.Data;
 namespace SGPA_CALCULATOR.Migrations
 {
     [DbContext(typeof(SgpaDbContext))]
-    partial class SgpaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260711144102_Final-Database")]
+    partial class FinalDatabase
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
