@@ -11,8 +11,8 @@ using SGPA_CALCULATOR.Infrastructure.Data;
 namespace SGPA_CALCULATOR.Migrations
 {
     [DbContext(typeof(SgpaDbContext))]
-    [Migration("20260711144102_Final-Database")]
-    partial class FinalDatabase
+    [Migration("20260711174121_update-final-db")]
+    partial class updatefinaldb
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
