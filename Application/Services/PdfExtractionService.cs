@@ -1,17 +1,4 @@
-﻿// Application/Services/IPdfExtractorService.cs
-// Application/Services/PdfExtractorService.cs
-// ─────────────────────────────────────────────────────────────────────────────
-// LEARNING CONCEPT — Interface + Implementation separation:
-//
-//   IPdfExtractorService defines the CONTRACT  (what it can do)
-//   PdfExtractorService   provides the BEHAVIOUR (how it does it)
-//
-//   ASP.NET's Dependency Injection wires them together in Program.cs:
-//     services.AddScoped<IPdfExtractorService, PdfExtractorService>();
-//
-//   This means you can swap implementations (e.g., replace Flask with a
-//   direct pdfplumber call) without changing anything in the controller.
-// ─────────────────────────────────────────────────────────────────────────────
+﻿
 
 using System.Net.Http.Json;
 using SGPA_CALCULATOR.Application.Exceptions;
