@@ -1,6 +1,5 @@
 <Solution>
   <Folder Name="/PythonService/">
-    <File Path="Flask_app.py" />
     <File Path="Requirementtxt.txt" />
     <File Path="Start.bat" />
   </Folder>

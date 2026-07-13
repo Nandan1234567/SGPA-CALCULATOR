@@ -1,0 +1,325 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+
+
+/*
+
+
+
+    ─── DESIGN TOKENS ────────────────────────────────────────────────────────
+   Naming convention: --{category}-{name}-{scale}
+   --color-*   → generates bg-*, text-*, border-*, fill-*, stroke-*, etc.
+   --font-*    → generates font-* utility classes
+   --radius-*  → generates rounded-* utility classes
+   --shadow-*  → generates shadow-* utility classes
+   --text-*    → generates text-* font-size utility classes
+   ───────────────────────────────────────────────────────────────────────── */
+
+
+
+
+     /* PRIMARY — the forest green */
+  --color-brand-950: #0a1c13;
+  --color-brand-900: #122a1e;
+  --color-brand-800: #1a3a2a;
+  --color-brand-700: #1a5435;
+  --color-brand-600: #1e6b42;
+  --color-brand-500: #2d8f58;
+  --color-brand-400: #45aa72;
+  --color-brand-300: #75c696;
+  --color-brand-200: #aadcbc;
+  --color-brand-100: #d5eedd;
+  --color-brand-50: #edf7f2;
+
+
+ /* PAGE BACKGROUND */
+  --color-cream-50: #ffffff;
+  --color-cream-100: #fdfcf9;
+  --color-cream-200: #f5f2ea;
+  --color-cream-300: #edeae2;
+  --color-cream-400: #e0dcd3;
+  --color-cream-500: #ccc8be;
+
+  --color-ink-primary: #1a3a2a;
+  --color-ink-secondary: #2d4a3c;
+  --color-ink-muted: #7a9080;
+  --color-ink-subtle: #a0b5ab;
+  --color-ink-disabled: #c5d4cf;
+  --color-ink-inverse: #ffffff;
+
+  --color-badge-bg: #dceee4;
+  --color-badge-text: #1a3a2a;
+
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+
+
+
+--text-display: 3rem;
+
+--text-h1: 2.25rem;
+--text-h2: 1.75rem;
+--text-h3: 1.375rem;
+--text-h4: 1.125rem;
+--text-body: 1rem;
+--text-body-sm: 0.875rem;
+--text-caption: 0.75rem;
+
+/* MAX WIDTHS — generates max-w-card, max-w-content, max-w-page, max-w-narrow */
+
+--max-width-card: 680px;
+--max-width-content: 760px;
+--max-width-page: 1200px;
+--max-width-narrow: 540px;
+
+/* SHADOWS — generates shadow-card, shadow-focus, shadow-btn, etc. */
+
+--shadow-card: 0 4px 16px rgba(26, 58, 42, 0.08),
+0 1px 4px rgba(26, 58, 42, 0.04);
+
+--shadow-card-hover: 0 8px 24px rgba(26, 58, 42, 0.12),
+0 2px 8px rgba(26, 58, 42, 0.06);
+
+--shadow-focus: 0 0 0 3px rgba(26, 58, 42, 0.12);
+--shadow-btn: 0 2px 8px rgba(26, 58, 42, 0.20);
+--shadow-dropdown: 0 8px 24px rgba(0, 0, 0, 0.12),
+0 2px 8px rgba(0, 0, 0, 0.06);
+
+}
+
+
+
+/* ─── CSS VARIABLES NOT IN @THEME ──────────────────────────────────────────
+   rgba borders don't generate clean utility classes in v4.
+   Use them via var(--color-border) in component CSS below.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --color-border: rgba(0, 0, 0, 0.09);
+  --color-border-medium: rgba(0, 0, 0, 0.12);
+  --color-border-strong: rgba(26, 58, 42, 0.20);
+  --color-border-brand: rgba(26, 58, 42, 0.30);
+}
+
+/* ─── BASE RESET ────────────────────────────────────────────────────────────
+   Override browser defaults for the whole app.
+   ─────────────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+
+
+
+html {
+  font-family: var(--font-sans);
+  background-color: var(--color-cream-300);
+  color: var(--color-ink-primary);
+  -webkit-font-smoothing: antialiased;
+
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 700;
+  color: var(--color-ink-primary);
+  letter-spacing: -0.01em;
+}
+
+/* ─── COMPONENT CLASSES ────────────────────────────────────────────────────
+   Reusable class utilities. Write once here, use className="btn-primary" anywhere.
+   Why not just use Tailwind utilities directly? Because "bg-brand-800 text-white
+   font-semibold text-sm px-6 py-2.5 rounded-pill shadow-btn hover:bg-brand-900
+   active:bg-brand-950 focus-visible:shadow-focus disabled:bg-ink-disabled
+   disabled:cursor-not-allowed transition-colors" is 20+ classes that you'd repeat
+   in every button. One class = one source of truth.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background-color: var(--color-brand-800);
+  color: var(--color-ink-inverse);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  box-shadow: var(--shadow-btn);
+  transition: background-color 150ms ease, transform 100ms ease;
+  white-space: nowrap;
+  text-decoration: none;
+  outline: none;
+  user-select: none;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-brand-900);
+}
+
+.btn-primary:active {
+  background-color: var(--color-brand-950);
+  transform: translateY(1px);
+}
+
+.btn-primary:focus-visible {
+  box-shadow: var(--shadow-focus);
+}
+
+
+
+.btn-primary:disabled {
+  background-color: var(--color-ink-disabled);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: transparent;
+  color: var(--color-ink-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+  white-space: nowrap;
+  text-decoration: none;
+  outline: none;
+}
+
+.btn-ghost:hover {
+  background-color: var(--color-cream-200);
+  border-color: var(--color-border-strong);
+}
+
+.btn-ghost:focus-visible {
+  box-shadow: var(--shadow-focus);
+}
+
+.card {
+  background-color: var(--color-cream-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 24px 28px;
+  box-shadow: var(--shadow-card);
+}
+
+.input {
+  width: 100%;
+  background-color: var(--color-cream-50);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  color: var(--color-ink-primary);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.input::placeholder {
+  color: var(--color-ink-muted);
+}
+
+.input:focus {
+  border-color: var(--color-border-brand);
+  box-shadow: var(--shadow-focus);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background-color: var(--color-badge-bg);
+  color: var(--color-badge-text);
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0.02em;
+  /* Small text benefits from slight letter-spacing — improves readability at 12px. */
+}
+
+.dropdown-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: var(--color-cream-50);
+  border: 1px solid var(--color-border-medium);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-ink-primary);
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: border-color 150ms ease;
+  outline: none;
+}
+
+.dropdown-pill:hover {
+  border-color: var(--color-border-strong);
+}
+
+.dropdown-pill:focus-visible {
+  box-shadow: var(--shadow-focus);
+}
+
+.nav-link {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--color-ink-secondary);
+  text-decoration: none;
+  transition: color 150ms ease;
+  outline: none;
+}
+
+.nav-link:hover {
+  color: var(--color-ink-primary);
+}
+
+.nav-link.active {
+  font-weight: 600;
+  color: var(--color-ink-primary);
+}
+
+.nav-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+}
