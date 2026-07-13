@@ -1,10 +1,9 @@
 <Solution>
   <Folder Name="/PythonService/">
-    <File Path="Flask_app.py" />
     <File Path="Requirementtxt.txt" />
     <File Path="Start.bat" />
   </Folder>
-  <Folder Name="/VtuSgpaCalcutor/">
+  <Folder Name="/backend">
     <Project Path="SGPA-CALCULATOR.csproj" />
   </Folder>
 </Solution>
