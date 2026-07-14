@@ -31,7 +31,7 @@ from flask import Flask, request, jsonify
 # ─────────────────────────────────────────────────────────────────────────────
 
 app = Flask(__name__)
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024 
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger(__name__)
 
@@ -393,4 +393,4 @@ if __name__ == "__main__":
         # debug=True: auto-reloads when you save flask_app.py
         # threaded=True: handles concurrent requests during testing
         print("Starting Flask dev server on port 5050")
-        app.run(host="0.0.0.0", port=5050, debug=True, threaded=True)   
+        app.run(host="0.0.0.0", port=5050, debug=True, threaded=True)
