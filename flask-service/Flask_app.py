@@ -1,4 +1,4 @@
-j"""
+"""
 flask_app.py  —  VTU PDF Extractor Microservice
 ================================================
 Runs as a long-lived HTTP server (not called per-request like Process.Start).
