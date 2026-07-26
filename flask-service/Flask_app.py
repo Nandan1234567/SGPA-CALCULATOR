@@ -22,7 +22,6 @@ import re
 import io
 import json
 import logging
-
 import pdfplumber
 from flask import Flask, request, jsonify
 
