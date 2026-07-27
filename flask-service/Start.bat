@@ -1,14 +1,12 @@
 @echo off
 REM ─────────────────────────────────────────────────────────────────────────
-REM  start.bat — Launch VTU PDF Extractor Flask service on Windows
+REM  Start.bat — Launch VTU PDF Extractor Flask service (Windows)
 REM
-REM  HOW TO USE:
-REM    1. Double-click this file  OR  run it from a terminal
-REM    2. Keep the window open while your ASP.NET app is running
-REM    3. Flask will be available at http://localhost:5050
+REM  Usage: Double-click OR run from terminal
+REM  Flask runs at: http://localhost:5050
 REM
-REM  FIRST-TIME SETUP:
-REM    pip install -r requirements.txt
+REM  First-time setup:
+REM    pip install -r requirements-windows.txt
 REM ─────────────────────────────────────────────────────────────────────────
 
 echo [VTU Flask Service] Starting PDF extractor on port 5050...
@@ -18,13 +16,22 @@ echo.
 REM Navigate to the folder this .bat file lives in
 cd /d "%~dp0"
 
+REM Activate venv if it exists (Windows path uses Scripts not bin)
+if exist "venv\Scripts\activate.bat" (
+    call venv\Scripts\activate.bat
+    echo [VTU Flask Service] venv activated.
+) else (
+    echo [WARNING] No venv found. Using system Python.
+    echo [WARNING] Run: python -m venv venv and pip install -r requirements-windows.txt
+)
+
 REM Start Flask
 python flask_app.py
 
-REM If Python fails (not found, wrong env), pause so you can read the error
+REM If Python fails, pause so you can read the error
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [ERROR] Flask failed to start. Make sure Python is in PATH
-    echo         and you have run:  pip install -r requirements.txt
+    echo [ERROR] Flask failed to start. Check above for the error.
+    echo         Make sure you ran: pip install -r requirements-windows.txt
     pause
 )
