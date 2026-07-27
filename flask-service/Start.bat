@@ -6,7 +6,7 @@ REM  Usage: Double-click OR run from terminal
 REM  Flask runs at: http://localhost:5050
 REM
 REM  First-time setup:
-REM    pip install -r requirements-windows.txt
+REM    pip install -r requirements.txt
 REM ─────────────────────────────────────────────────────────────────────────
 
 echo [VTU Flask Service] Starting PDF extractor on port 5050...
