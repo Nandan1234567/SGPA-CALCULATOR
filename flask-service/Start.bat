@@ -22,7 +22,7 @@ if exist "venv\Scripts\activate.bat" (
     echo [VTU Flask Service] venv activated.
 ) else (
     echo [WARNING] No venv found. Using system Python.
-    echo [WARNING] Run: python -m venv venv and pip install -r requirements-windows.txt
+    echo [WARNING] Run: python -m venv venv and pip install -r requirements.txt
 )
 
 REM Start Flask
@@ -32,6 +32,6 @@ REM If Python fails, pause so you can read the error
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [ERROR] Flask failed to start. Check above for the error.
-    echo         Make sure you ran: pip install -r requirements-windows.txt
+    echo         Make sure you ran: pip install -r requirements.txt
     pause
 )
