@@ -30,9 +30,13 @@ env/
 node_modules/
 dist/
 .env.local       # contains VITE_API_KEY — never commit
-.env.production  # contains real keys — never commit
+#.env.production  # contains real keys — never commit
 
 ## OS
 .DS_Store
 Thumbs.db
 
+__pycache__/
+*.pyc
+flask-service/venv/
+flask-service/.venv/
