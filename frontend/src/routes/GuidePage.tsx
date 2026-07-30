@@ -64,8 +64,7 @@ export default function GuidePage() {
     setResolveResult(null)
 
     try {
-
-      const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
+      const baseUrl = import.meta.env.VITE_API_BASE_URL as string
       const url = `${baseUrl}/api/sgpa/resolve?code=${encodeURIComponent(code)}`
 
       const res = await fetch(url)

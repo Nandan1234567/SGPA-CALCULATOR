@@ -1,16 +1,14 @@
+import {  useNavigate } from 'react-router'
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router'
 import type { ApiError } from '../api/types'
 import UploadDropzone from '../components/sgpa/UploadDropzone'
 import { useUploadPdf } from '../hooks/useUploadPdf'
 import { useSgpaStore } from '../store/useSgpaStore'
 
 // displaying the error
-function getErrorMessage(error: ApiError | null): string | null
-{
+function getErrorMessage(error: ApiError | null): string | null {
   if (!error) return null
-  switch (error.statusCode)
-  {
+  switch (error.statusCode) {
     case 400: return error.message
     case 413: return 'File too large. VTU result PDFs are usually under 500 KB. Check you uploaded the correct file.'
     case 422: return 'This does not look like a VTU result PDF. Download your result from results.vtu.ac.in and try again.'
@@ -21,48 +19,35 @@ function getErrorMessage(error: ApiError | null): string | null
   }
 }
 
-export default function HomePage()
-{
+export default function HomePage() {
   const navigate = useNavigate()
   const sgpaResult = useSgpaStore((s) => s.sgpaResult)
 
   // ✅ SMART NAV FIX: If SGPA data already exists in global store, instantly send them back to results
-  useEffect(() =>
-  {
-    if (sgpaResult)
-    {
+  useEffect(() => {
+    if (sgpaResult) {
       navigate('/results', { replace: true })
     }
   }, [ sgpaResult, navigate ])
 
   // Silent wake-up logic with explicit browser developer logs
-  // Silent wake-up logic
-  useEffect(() =>
-  {
-    const baseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
-
-    fetch(`${baseUrl}/api/sgpa/ping`)
-      .then((res) => res.json())
-      .then((data) =>
-      {
-        if (import.meta.env.DEV)
-        {
+  useEffect(() => {
+    const baseUrl = import.meta.env.VITE_API_BASE_URL
+    if (baseUrl) {
+      fetch(`${baseUrl}/api/sgpa/ping`)
+        .then((res) => res.json())
+        .then((data) => {
           console.log('%c[Dev Log] Pre-warming sequence completed successfully! Server is live.', 'color: #15803d; font-weight: bold;', data);
-        }
-      })
-      .catch((err) =>
-      {
-        if (import.meta.env.DEV)
-        {
+        })
+        .catch((err) => {
           console.warn('%c[Dev Warning] Pre-warming ping failed or server is cold-starting. Initializing background wake-up routine.', 'color: #b45309; font-weight: bold;', err);
-        }
-      });
+        });
+    }
   }, []);
 
   const { upload, isPending, isError, error, reset } = useUploadPdf()
 
-  function handleUpload(file: File)
-  {
+  function handleUpload(file: File) {
     if (isError) reset() // clear previous error before retrying
     upload(file)
   }

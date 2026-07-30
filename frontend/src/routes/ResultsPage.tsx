@@ -1,4 +1,4 @@
-import  { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ArrowLeft, ArrowRight, RotateCcw } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import ResultSummary from '../components/sgpa/ResultSummary'

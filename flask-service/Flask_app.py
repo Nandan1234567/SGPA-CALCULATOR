@@ -22,6 +22,7 @@ import re
 import io
 import json
 import logging
+
 import pdfplumber
 from flask import Flask, request, jsonify
 
@@ -354,9 +355,42 @@ def extract():
 # ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
+# NEW:
 if __name__ == "__main__":
-    # Local development only. In Docker, Gunicorn runs the app directly via the CMD:
-    # gunicorn --workers 4 --worker-class sync --timeout 60 -b 0.0.0.0:5050 flask_app:app
+    import os
 
-    print("Starting Flask dev server on port 5050 for local testing...")
-    app.run(host="0.0.0.0", port=5050, debug=True, threaded=True)
+    env = os.environ.get("FLASK_ENV", "development")
+    # FLASK_ENV environment variable controls which server runs.
+    # Development: set nothing → Flask dev server (auto-reload, debug info)
+    # Production:  set FLASK_ENV=production → Waitress (multi-process, no debug)
+    #
+    # How to set on Windows locally:  set FLASK_ENV=production
+    # How to set on Azure App Service: Configuration → App Settings → FLASK_ENV = production
+    # How to set with systemd:         Environment=FLASK_ENV=production in service file
+
+    if env == "production":
+        # ── PRODUCTION: Waitress ───────────────────────────────────────────
+        # pip install waitress  (add to requirements.txt)
+        #
+        # WHY Waitress and not Flask dev server?
+        # Flask dev server: 1 Python process, GIL limits true parallelism
+        # Waitress: true multi-threaded WSGI server, no GIL bottleneck for I/O
+        #
+        # threads=4 means 4 concurrent PDF extractions at once
+        # On result day: 10 students upload simultaneously
+        # Waitress: students 1-4 processed immediately (~94ms each)
+        #           students 5-8 queued, wait for slot (~188ms)
+        #           students 9-10 queued (~282ms)
+        # Flask dev: students 1-10 queued behind GIL → student 10 waits ~940ms
+        #
+        # threads=4 is conservative for a 2-core Azure VM.
+        # Rule of thumb: threads = 2 × CPU cores for I/O-bound work
+        from waitress import serve
+        print(f"Starting Waitress on port 5050 with 4 threads")
+        serve(app, host="127.0.0.1", port=5050, threads=4)
+    else:
+        # ── DEVELOPMENT: Flask dev server ─────────────────────────────────
+        # debug=True: auto-reloads when you save flask_app.py
+        # threaded=True: handles concurrent requests during testing
+        print("Starting Flask dev server on port 5050")
+        app.run(host="0.0.0.0", port=5050, debug=True, threaded=True)

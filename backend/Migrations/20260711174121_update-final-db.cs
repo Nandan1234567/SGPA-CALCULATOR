@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -8,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace SGPA_CALCULATOR.Migrations
 {
     /// <inheritdoc />
-    public partial class subjectcodes : Migration
+    public partial class updatefinaldb : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -17,13 +16,13 @@ namespace SGPA_CALCULATOR.Migrations
                 name: "SubjectMasters",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    SubjectCode = table.Column<string>(type: "text", nullable: false),
-                    Credits = table.Column<int>(type: "integer", nullable: false),
-                    SubjectType = table.Column<string>(type: "text", nullable: false),
-                    Semester = table.Column<int>(type: "integer", nullable: false),
-                    IsNonCreditForSgpa = table.Column<bool>(type: "boolean", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    SubjectCode = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Credits = table.Column<int>(type: "int", nullable: false),
+                    SubjectType = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Semester = table.Column<int>(type: "int", nullable: false),
+                    IsNonCreditForSgpa = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
