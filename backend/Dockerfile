@@ -41,7 +41,6 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 COPY --from=build /app/publish .
 
 # give non-root user permissons
-
 RUN chown -R appuser:appuser /app
 USER appuser
 ENV ASPNETCORE_URLS=http://+:8080

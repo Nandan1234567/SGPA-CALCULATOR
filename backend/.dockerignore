@@ -25,6 +25,7 @@ venv/
 .venv/
 env/
 
+
 #  Migrations/ is intentionally NOT added here in the ignore
 # Program.cs calls db.Database.Migrate() on startup.
 # If migrations are excluded, the app crashes on boot: "no migrations found".
