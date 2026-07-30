@@ -1,5 +1,5 @@
 
-import { useState, useRef, useCallback, useEffect, React } from 'react'
+import { useState, useRef, useCallback, useEffect} from 'react'
 import { Upload, FileText } from 'lucide-react'
 import { cn } from '../../lib/cn'
 

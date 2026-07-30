@@ -24,7 +24,7 @@ function sgpaLabel(v: number) {
 
 export default function ResultSummary({ result, fileName }: Props) {
   const pct = result.sgpa > 0.75 ? ((result.sgpa - 0.75) * 10).toFixed(2) : '0.00'
-  const included = result.subjects.filter((s) => s.isIncludedInSgpa).length
+  // const included = result.subjects.filter((s) => s.isIncludedInSgpa).length
   const color = sgpaHex(result.sgpa)
 
   return (

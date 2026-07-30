@@ -11,9 +11,6 @@ appsettings.Production.json
 appsettings.*.json
 !appsettings.json
 !appsettings.Development.json
-# The ! means "exception — DO commit these two"
-# Commit: appsettings.json (dummy values, safe)
-# Never commit: appsettings.Production.json (real passwords)
 
 ## Python
 __pycache__/
@@ -22,17 +19,17 @@ __pycache__/
 .env
 venv/
 env/
-*.egg-info/
 .venv/
-
+*.egg-info/
+flask-service/venv/
+flask-service/.venv/
 
 ## React / Node
 node_modules/
 dist/
-.env.local       # contains VITE_API_KEY — never commit
-.env.production  # contains real keys — never commit
+.env.local
+.env.production
 
 ## OS
 .DS_Store
 Thumbs.db
-

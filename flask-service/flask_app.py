@@ -351,12 +351,11 @@ def extract():
     return jsonify(data), 200
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Entry point
-# ─────────────────────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     # Local development only. In Docker, Gunicorn runs the app directly via the CMD:
     # gunicorn --workers 4 --worker-class sync --timeout 60 -b 0.0.0.0:5050 flask_app:app
 
     print("Starting Flask dev server on port 5050 for local testing...")
     app.run(host="0.0.0.0", port=5050, debug=True, threaded=True)
+
