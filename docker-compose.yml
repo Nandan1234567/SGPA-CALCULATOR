@@ -1,0 +1,65 @@
+
+
+networks:
+  sgpa_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sgpa-postgres
+    networks:
+      - sgpa_net
+    environment:
+      POSTGRES_DB: sgpa_db_dev
+      POSTGRES_USER: sgpa_user
+      POSTGRES_PASSWORD: devpassword
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sgpa_user -d sgpa_db_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sgpa-backend
+    networks:
+      - sgpa_net
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      # Host=postgres — Docker DNS resolves the service name, NOT localhost
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=sgpa_db_dev;Username=sgpa_user;Password=devpassword;"
+      FlaskService__BaseUrl: "http://flask:5050"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  flask:
+    build:
+      context: ./flask-service
+      dockerfile: Dockerfile
+    container_name: sgpa-flask
+    networks:
+      - sgpa_net
+
+  nginx:
+    build:
+      context: .                    # root — can access both frontend/ and nginx/
+      dockerfile: nginx/Dockerfile  # correct location
+      args:
+        VITE_API_BASE_URL: ""
+    container_name: sgpa-nginx
+    networks:
+      - sgpa_net
+    depends_on:
+      - backend
+      - flask

@@ -1,0 +1,106 @@
+# Run in production with:
+# docker compose -f docker-compose.prod.yml --env-file .env up -d
+
+networks:
+  sgpa_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  certbot_conf:
+  certbot_www:
+  nginx_logs:
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: sgpa-postgres
+    restart: unless-stopped
+    networks:
+      - sgpa_net
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sgpa-backend
+    restart: unless-stopped
+    networks:
+      - sgpa_net
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: >-
+        Host=postgres;Port=5432;
+        Database=${POSTGRES_DB};
+        Username=${POSTGRES_USER};
+        Password=${POSTGRES_PASSWORD};
+        Pooling=true;MinPoolSize=2;MaxPoolSize=20;
+      FlaskService__BaseUrl: "http://flask:5050"
+      Cors__AllowedOrigins__0: ${FRONTEND_URL:?FRONTEND_URL must be set}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  flask:
+    build:
+      context: ./flask-service
+      dockerfile: Dockerfile
+    container_name: sgpa-flask
+    restart: unless-stopped
+    networks:
+      - sgpa_net
+    environment:
+      FLASK_ENV: production
+
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx/Dockerfile
+      args:
+        VITE_API_BASE_URL: ""
+    container_name: sgpa-nginx
+    restart: unless-stopped
+    networks:
+      - sgpa_net
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+      - nginx_logs:/var/log/nginx
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - backend
+      - flask
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: sgpa-certbot
+    restart: unless-stopped
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "
+        trap exit TERM;
+        while :; do
+          certbot renew --webroot --webroot-path=/var/www/certbot --quiet;
+          sleep 12h & wait $${!};
+        done
+      "
