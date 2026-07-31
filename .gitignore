@@ -23,6 +23,7 @@ env/
 *.egg-info/
 flask-service/venv/
 flask-service/.venv/
+Start.bat
 
 ## React / Node
 node_modules/
@@ -33,3 +34,4 @@ dist/
 ## OS
 .DS_Store
 Thumbs.db
+build.log
