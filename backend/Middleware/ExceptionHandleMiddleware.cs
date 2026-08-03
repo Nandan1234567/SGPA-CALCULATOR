@@ -11,7 +11,7 @@ using System.Reflection.Metadata;
 using System.Text.Json;
 using SGPA_CALCULATOR.Application.Exceptions;
 
-namespace SGPA_CALCULATOR.Middelware
+namespace SGPA_CALCULATOR.Middleware
 {
   public class ExceptionHandleMiddleware
   {
