@@ -1,0 +1,20 @@
+
+
+services:
+  postgres:
+    ports:
+      - "5433:5432"   # 5433 on host to avoid conflict if local postgres is running
+
+  backend:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    ports:
+      - "5100:8080"   # Swagger UI at localhost:5100/swagger
+
+  flask:
+    ports:
+      - "5050:5050"   # direct Flask access for testing
+
+  nginx:
+    ports:
+      - "80:80"

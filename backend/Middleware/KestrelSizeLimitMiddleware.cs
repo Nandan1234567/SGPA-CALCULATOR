@@ -9,7 +9,7 @@
 //   to ExceptionHandleMiddleware for a generic 500 or 400.
 
 using SGPA_CALCULATOR.Application.Dtos;
-using SGPA_CALCULATOR.Middelware;
+using SGPA_CALCULATOR.Middleware;
 
 namespace SGPA_CALCULATOR.Middleware
 {

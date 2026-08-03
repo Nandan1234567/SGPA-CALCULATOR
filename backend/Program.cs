@@ -4,7 +4,7 @@ using Polly;
 using SGPA_CALCULATOR.Application.Interface;
 using SGPA_CALCULATOR.Application.Services;
 using SGPA_CALCULATOR.Infrastructure.Data;
-using SGPA_CALCULATOR.Middelware;
+using SGPA_CALCULATOR.Middleware;
 using SGPA_CALCULATOR.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);

@@ -1,4 +1,4 @@
-﻿namespace SGPA_CALCULATOR.Middelware
+﻿namespace SGPA_CALCULATOR.Middleware
 {
     public class ApiErrorResponse
     {
