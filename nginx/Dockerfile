@@ -20,15 +20,16 @@ RUN rm /etc/nginx/conf.d/default.conf
 
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 
-# context is root, so nginx/conf.d/app.conf is accessible
-COPY nginx/conf.d/app.conf /etc/nginx/conf.d/app.conf
 
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+RUN mkdir -p /var/www/certbot
 
+EXPOSE 80 443
 # In nginx/Dockerfile, change HEALTHCHECK to:
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD curl -f http://localhost/health-nginx 2>/dev/null || wget -qO- http://localhost/health-nginx || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
+
+
