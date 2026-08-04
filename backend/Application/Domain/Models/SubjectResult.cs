@@ -1,24 +1,4 @@
-﻿// Domain/Models/SubjectResult.cs
-// ─────────────────────────────────────────────────────────────────────────────
-// BUGS FIXED:
-//
-// BUG 1 (Critical) — internal-only subjects always showed grade=F
-//   Old:  if (externalMarks < 18) return 0.0;
-//   BNSK459: external=0 → 0 < 18 = TRUE → grade=F  ← WRONG, PDF says P
-//   Fix:  if (normExternal > 0 && normExternal < 18)
-//   Now:  external=0 skips the check → grade computed from total alone ✓
-//
-// BUG 2 — Withheld / Absent subjects
-//   W (Withheld) and A (Absent) need special grades, not computed from marks.
-//   We accept a pdfResult param ("P","F","W","A","X") and use it to override
-//   the computed grade when marks can't be trusted (W, A).
-//
-// LEARNING — Why accept pdfResult at all?
-//   Because the PDF is the official source of truth. VTU prints "P" or "F"
-//   directly. Our formula is a fallback when pdfResult is empty or unavailable.
-//   When pdfResult is available, we trust it for IsPass and Grade display.
-//   We still compute GradePoints from marks because SGPA needs the number.
-// ─────────────────────────────────────────────────────────────────────────────
+﻿
 
 namespace SGPA_CALCULATOR.Domain.Models
 {
@@ -41,6 +21,7 @@ namespace SGPA_CALCULATOR.Domain.Models
         /// <param name="totalMarks">As read from PDF (may differ from cie+see for 200-mark subjects)</param>
         /// <param name="credits">From VtuCreditResolver</param>
         /// <param name="pdfResult">
+
         ///   Official result from PDF: "P" / "F" / "W" / "A" / "X" / "NE" / ""
         ///   When non-empty, overrides computed IsPass and Grade for display.
         ///   GradePoints are still computed from marks (needed for SGPA math).
@@ -105,7 +86,7 @@ namespace SGPA_CALCULATOR.Domain.Models
         }
 
         // ── VTU 22 Scheme pass rule ────────────────────────────────────────
-        // Both conditions must be true:
+        
         //   1. Total >= 40/100
         //   2. SEE >= 18/50  (equivalent to ≥36/100, ≥35 threshold)
         //      SKIP condition 2 when normExternal == 0 (no external exam):

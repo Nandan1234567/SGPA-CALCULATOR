@@ -1,11 +1,4 @@
-﻿//using Microsoft.EntityFrameworkCore;
-//using Microsoft.Identity.Client;
-//using System.Runtime.InteropServices;
-//using static System.Runtime.InteropServices.JavaScript.JSType;
-
-
-using Microsoft.EntityFrameworkCore;
-
+﻿using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Reflection.Metadata;
 using System.Text.Json;
@@ -31,8 +24,6 @@ namespace SGPA_CALCULATOR.Middleware
       _logger = logger;
 
     }
-
-
 
     public async Task InvokeAsync(HttpContext context)
     {
@@ -77,15 +68,10 @@ namespace SGPA_CALCULATOR.Middleware
 
       // The pattern switch (ex switch) checks the RUNTIME TYPE of ex.
       // Order matters — more specific types first, general types last.
-
-      // IMPORTANT: SqlException and DbUpdateException need special handling
-      // because they're not base .NET — they come from specific libraries.
       int statusCode = ex switch
       {
         // ── CALLER ERRORS (4xx) ─────────────────────────────────────
         // These are the caller's fault. Be specific so they can fix it.
-
-
 
         ArgumentNullException => (int)HttpStatusCode.BadRequest,      // 400
         ArgumentOutOfRangeException => (int)HttpStatusCode.BadRequest,      // 400
@@ -93,8 +79,6 @@ namespace SGPA_CALCULATOR.Middleware
                                                                   // Put ArgumentNullException BEFORE ArgumentException
                                                                   // because ArgumentNullException IS-A ArgumentException
                                                                   // The switch takes the FIRST match. More specific = first.
-
-
 
 
         PdfValidationException => 422,//(wrong PDF = user error)
@@ -122,19 +106,13 @@ namespace SGPA_CALCULATOR.Middleware
         // SqlException removed - using PostgreSQL now
         // Npgsql throws NpgsqlException but it inherits from DbException
         System.Exception e when e.GetType().Name.Contains("Npgsql") => (int)HttpStatusCode.ServiceUnavailable,// 503
-                                                                                                              
+
 
         DbUpdateException => (int)HttpStatusCode.ServiceUnavailable, // 503
                                                                      // DbUpdateException = EF Core failed to save/update
-                                                                     // Wraps SqlException but also covers constraint violations
 
         InvalidOperationException => (int)HttpStatusCode.ServiceUnavailable, // 503
                                                                              // YOUR manually thrown exceptions (Flask returned bad JSON, etc.)
-                                                                             // See PdfExtractorService.cs — you throw InvalidOperationException
-
-        // ── YOUR CODE BUGS (500) ────────────────────────────────────
-        // NullReference, IndexOutOfRange, JsonException, etc.
-        // If these reach here, you have a bug to fix.
 
         InvalidDataException => (int)HttpStatusCode.BadRequest,
 
@@ -144,15 +122,6 @@ namespace SGPA_CALCULATOR.Middleware
       };
 
       // ── STEP 3: Build the message the USER sees ───────────────────────
-      //
-      // SECURITY RULE: Never expose internal details for 500 errors.
-      // What you must NEVER send to the user:
-      //   ✗ ex.Message for 500s (might contain SQL query, file path, class name)
-      //   ✗ ex.StackTrace (shows your code structure — helps attackers)
-      //   ✗ ex.GetType().Name (attackers learn what you're using)
-      //   ✗ Inner exception details
-      //
-      // What IS safe to send:
       //   ✓ Generic messages for 500s
       //   ✓ ex.Message for 400s (you wrote these messages — they're safe)
       //   ✓ Partial ex.Message for 503s (dependency name is okay to share)
@@ -166,12 +135,8 @@ namespace SGPA_CALCULATOR.Middleware
 
         422 => ex.Message + " Kindly upload downloaded  pdf from the phone",
 
-
-
         503 => "A required service is temporarily unavailable. Please try again.",
-        // SEMI-GENERIC for 503: don't say "Flask on port 5050 is down"
-        // User doesn't need technical details. Just "try again later."
-        // The real message is in the logs.
+
 
         504 => "The request took too long. Please try again.",
         // Friendly timeout message
@@ -180,23 +145,6 @@ namespace SGPA_CALCULATOR.Middleware
         _ => "Something went wrong. Please try again."
         // ALL 500s → ALWAYS generic. No exceptions.
       };
-
-      // ── STEP 4: LOG the full exception ────────────────────────────────
-      //
-      // This is what YOU see (not the user).
-      // LogError() writes:
-      //   - The errorId (so you can find this specific occurrence)
-      //   - The HTTP method and path (which endpoint failed)
-      //   - The FULL exception: type + message + stack trace
-      //   - The inner exception (if any — e.g., DbUpdateException wraps SqlException)
-      //
-      // In Azure Application Insights, these become searchable log entries.
-      // You search by errorId, by exception type, by path, by time range.
-
-      // And in the logging section, change this:
-      // Don't log cancellations as errors — they pollute your logs with noise
-
-
 
 
       _logger.LogError(
@@ -207,11 +155,6 @@ namespace SGPA_CALCULATOR.Middleware
           context.Request.Method,           // "POST", "GET"
           context.Request.Path              // "/api/sgpa/from-pdf"
       );
-      // Your log output looks like:
-      // [ERROR] Unhandled exception [ERR-550E8400] SqlException on POST /api/sgpa/from-pdf
-      //         Microsoft.Data.SqlClient.SqlException: A network-related instance-specific error...
-      //           at VtuCreditResolver..ctor() line 42
-      //           at SgpaController..ctor() line 28
 
       // ── STEP 5: Build response object ─────────────────────────────────
       var errorResponse = new ApiErrorResponse
@@ -223,10 +166,7 @@ namespace SGPA_CALCULATOR.Middleware
         TimeStamp = DateTime.UtcNow,  // Always UTC — server may be in different timezone
       };
 
-      // ── STEP 6: Write HTTP response ────────────────────────────────────
-      // At this point, the controller never sent a response (it threw).
-      // We write the response manually.
-      //
+
       // IMPORTANT: Check if response has already started.
       // If the controller streamed partial data before throwing (rare but possible),
       // we can't change headers anymore. ASP.NET will handle it.

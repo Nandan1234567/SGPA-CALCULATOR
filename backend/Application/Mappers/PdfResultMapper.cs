@@ -1,24 +1,4 @@
-﻿// Application/Mappers/PdfResultMapper.cs
-//
-// CONCEPT — Single Responsibility Principle (SRP):
-// Before this file: SgpaController.FromPdf() was doing 3 things:
-//   1. Validate the HTTP request (file null check, size check)
-//   2. Call Flask to extract PDF
-//   3. MAP PdfExtractResult → SgpaRequest  ← this doesn't belong in a controller
-//   4. Call SgpaService.Calculate()
-//   5. Return HTTP response
-//
-// A controller's job is to handle HTTP IN and HTTP OUT.
-// Mapping between internal models is a separate concern.
-// If Flask adds a new field (say, "CollegeCode"), you change ONE file here.
-// The controller stays unchanged.
-//
-// This is also now unit-testable:
-//   var result = PdfResultMapper.ToSgpaRequest(fakeExtracted);
-//   Assert.Equal(3, result.Semester);
-// Before: you couldn't test mapping without spinning up a controller.
-
-using SGPA_CALCULATOR.Application.Dtos;
+﻿using SGPA_CALCULATOR.Application.Dtos;
 using SGPA_CALCULATOR.DTOs;
 
 namespace SGPA_CALCULATOR.Application.Mappers

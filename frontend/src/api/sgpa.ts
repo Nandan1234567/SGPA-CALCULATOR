@@ -1,5 +1,3 @@
-// The actual API call functions for the SGPA feature.
-
 
 import { postFormData, postJson } from './client'
 import type { SgpaResponse, SgpaRequest } from './types'
@@ -10,7 +8,7 @@ export async function uploadPdf(file: File): Promise<SgpaResponse> {
 // FormData: the browser standard for encoding file uploads.
 
   formData.append('pdf', file, file.name)
-  
+
   //   In SgpaController.cs: "public async Task<ActionResult<SgpaResponse>> FromPdf(IFormFile? pdf)"
 
 

@@ -2,10 +2,7 @@ import { Link } from 'react-router'
 
 export default function NotFoundPage() {
   return (
-    /*
-      1. w-full & min-h-[70vh]: Stretches 100% across the monitor width (eliminating the right gap!) and 70% of the screen height.
-      2. flex flex-col items-center justify-center: Locks the badge, title, and button dead-center both horizontally and vertically.
-    */
+    
     <div className="w-full min-h-[70vh] flex flex-col items-center justify-center px-4 sm:px-6 py-12 text-center">
 
       {/* Playful VTU Engineering Badge (Grammar corrected) */}

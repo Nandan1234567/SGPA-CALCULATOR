@@ -1,4 +1,4 @@
-﻿// FILE: Application/Exceptions/PdfValidationException.cs  ← CREATE THIS FILE
+﻿
 
 namespace SGPA_CALCULATOR.Application.Exceptions
 {

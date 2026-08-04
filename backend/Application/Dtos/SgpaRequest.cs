@@ -20,7 +20,6 @@
         public string? Result { get; set; }   // SEE marks (out of 100)
 
         // Optional: if pdfplumber extracts the credit from the PDF directly, use it.
-        // Also serves as manual override when the pattern resolver can't determine credits.
         public int? ManualCreditOverride { get; set; }
     }
 }

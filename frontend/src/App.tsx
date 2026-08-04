@@ -30,13 +30,7 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       {
-        /*
-        
-          By placing errorElement here inside <Layout />, if HomePage, ResultsPage,
-          or CgpaPage suffers a fatal JavaScript crash, React Router catches it!
-          Navbar and Footer STAY intact on screen, and only the middle section
-           transforms into <ErrorPage />!
-        */
+       
         errorElement: <ErrorPage />,
         children: [
           { index: true, element: <HomePage /> },
