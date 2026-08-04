@@ -21,19 +21,9 @@ This tool eliminates that entirely. Drop the PDF. SGPA is computed in seconds. T
 ---
 
 ## Screenshots
-<p align="center">
-  <img src="docs/screenshots/landing.jpeg"
-       style="width:31%; height:400px; object-fit:cover; border-radius:8px;"
-       alt="Landing Page" />
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/result.jpeg"
-       style="width:31%; height:400px; object-fit:cover; border-radius:8px;"
-       alt="Result View" />
-  &nbsp;&nbsp;
-  <img src="docs/screenshots/cgpa.jpeg"
-       style="width:31%; height:400px; object-fit:cover; border-radius:8px;"
-       alt="CGPA Tracker" />
-</p>
+
+| [Landing Page](docs/screenshots/landing.jpeg) | [SGPA Result](docs/screenshots/result.jpeg) | [CGPA Tracker](docs/screenshots/cgpa.jpeg) |
+|---|---|---|
 
 ## Features
 
