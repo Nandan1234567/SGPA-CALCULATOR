@@ -46,20 +46,8 @@ namespace SGPA_CALCULATOR.Application.Services
 
             // ── Send to Flask ─────────────────────────────────────────────
             var client = _httpFactory.CreateClient("Flask");
-
-
-            // Generate a short correlation ID for THIS specific PDF extraction request.
-            // This same ID gets:
-            //   - Logged in C# before we call Flask
-            //   - Sent to Flask as HTTP header X-Request-Id
-            //   - Logged by Flask on receipt and on completion
-            // Result: grep "REQ-A3F9C201" in EITHER log → see the full story
             var requestId = "REQ-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
 
-            // TryAddWithoutValidation: safer than Add() — won't throw if header somehow exists
-            // X-Request-Id is the industry standard header name for correlation IDs
-            // Used by AWS, Azure, Google Cloud, nginx — your frontend can also read it
-           
             _log.LogInformation(
                 "[{RequestId}] Sending PDF to Flask — {Bytes} bytes — {FileName}",
                 requestId,
@@ -85,12 +73,9 @@ namespace SGPA_CALCULATOR.Application.Services
             "Make sure Flask is running: python flask_app.py", ex);
             }
 
-            // File: Application/Services/PdfExtractorService.cs
-            // FIXED — reads the HTTP status code and throws the RIGHT exception type
 
             if (!response.IsSuccessStatusCode)
             {
-                // Read the error body Flask sent back
                 // Flask sends: {"error": "No subject rows found..."} or {"error": "PDF extraction failed..."}
                 var errorBody = await response.Content.ReadAsStringAsync();
 
@@ -106,7 +91,7 @@ namespace SGPA_CALCULATOR.Application.Services
                 if ((int)response.StatusCode == 422)
                 {
                     // PdfValidationException message goes directly to the user
-                    // (your middleware does: 422 => ex.Message)
+                    // ( middleware does: 422 => ex.Message)
                     // So write a human-friendly message here, not a technical one
                     throw new PdfValidationException(
                         "The uploaded file is not a recognised VTU result PDF. " +
@@ -121,7 +106,7 @@ namespace SGPA_CALCULATOR.Application.Services
             }
 
 
-            // System.Text.Json deserialises camelCase JSON automatically   
+            // System.Text.Json deserialises camelCase JSON automatically
             // because we configured JsonNamingPolicy.CamelCase in Program.cs
             var result = await response.Content.ReadFromJsonAsync<PdfExtractResult>();
 

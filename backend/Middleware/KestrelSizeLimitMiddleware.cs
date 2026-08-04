@@ -1,15 +1,5 @@
-﻿
-
-// WHY "when (ex.Message.Contains("too large"))" ?
-//   BadHttpRequestException is used by Kestrel for MULTIPLE reasons:
-//   - Body too large
-//   - Malformed headers
-//   - Bad chunked encoding
-//   We only want to return 413 for "too large". Other reasons should fall through
-//   to ExceptionHandleMiddleware for a generic 500 or 400.
-
-using SGPA_CALCULATOR.Application.Dtos;
-using SGPA_CALCULATOR.Middelware;
+﻿using SGPA_CALCULATOR.Application.Dtos;
+using SGPA_CALCULATOR.Middleware;
 
 namespace SGPA_CALCULATOR.Middleware
 {

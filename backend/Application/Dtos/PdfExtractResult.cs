@@ -1,13 +1,4 @@
-﻿// DTOs/PdfExtractResult.cs
-// ─────────────────────────────────────────────────────────────────────────────
-// Shape of the JSON that Flask sends back after extracting a VTU PDF.
-// This must exactly match what flask_app.py returns in extract_from_bytes().
-//
-// LEARNING CONCEPT — DTO (Data Transfer Object):
-//   A DTO is a "dumb bag of data" — no logic, just properties.
-//   Its only job is to carry data from one layer (Flask) to another (ASP.NET).
-//   We then MAP this DTO into our domain model (SgpaRequest) in the service layer.
-// ─────────────────────────────────────────────────────────────────────────────
+﻿
 
 namespace SGPA_CALCULATOR.DTOs
 {

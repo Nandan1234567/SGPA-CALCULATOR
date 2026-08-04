@@ -13,9 +13,6 @@ namespace SGPA_CALCULATOR.Application.Services
     private readonly Dictionary<string, SubjectMaster> _sem12Cache;
     private readonly ILogger<VtuCreditResolver> _log; // ADD THIS FIELD
 
-
-
-
     public VtuCreditResolver(IServiceScopeFactory scopeFactory, ILogger<VtuCreditResolver> log)
     {
       _log = log;

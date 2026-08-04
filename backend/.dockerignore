@@ -1,31 +1,24 @@
 bin/
 obj/
 
-# Visual Studio local metadata — never needed at runtime
+
 .vs/
 *.user
 
-# VS launch profiles — only used by VS/VS Code to start the app locally.
-# Inside Docker, ASPNETCORE_URLS env var controls ports, not this file.
 Properties/launchSettings.json
 
-#  this file is ignored by ASP.NET config system anyway. Exclude to keep image clean.
+
 appsettings.Development.json
 
-# Production secrets must NOT be baked into the image.
-# They are injected at runtime via docker-compose environment: section.
+
 appsettings.Production.json
 
-# Git history has zero runtime value and adds MB to build context
+
 **/.git
 
-# Shouldn't exist in backend folder but guard anyway
+
 **/node_modules
 venv/
 .venv/
 env/
-
-#  Migrations/ is intentionally NOT added here in the ignore
-# Program.cs calls db.Database.Migrate() on startup.
-# If migrations are excluded, the app crashes on boot: "no migrations found".
 
