@@ -33,13 +33,15 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 
 #here with the worker 4 sync timeout of close is 30 and each request waits 6 second before closing the connection , after 500 request it flush randomly  log the error, and port is 5000 and entry point is app
 CMD ["gunicorn", \
-  "--workers", "4", \
+  "--workers", "2", \
   "--worker-class", "sync", \
+  "--preload", \
   "--timeout", "30", \
   "--graceful-timeout", "25", \
   "--keep-alive", "6", \
-  "--max-requests", "500", \
+  "--max-requests", "300", \
   "--max-requests-jitter", "50", \
+  "--worker-tmp-dir", "/dev/shm", \
   "--access-logfile", "-", \
   "--error-logfile", "-", \
   "--bind", "0.0.0.0:5050", \
