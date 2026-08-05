@@ -31,7 +31,7 @@ frontend/.env.local
 ## OS
 .DS_Store
 Thumbs.db
-<<<<<<< Updated upstream
+Updated upstream
 
 ## Docker
 docker-compose.override.yml
@@ -40,6 +40,7 @@ docker-compose.override.yml
 *.log
 logs/
 nginx_logs/
-=======
 build.log
->>>>>>> Stashed changes
+*.http
+*.slnx
+*.sln
